@@ -39,6 +39,10 @@ curl -X POST \
 # Rollback is as simple as promoting a previous deployment
 ```
 
+<subdomain>.sites.static-chic.online
+api.static-chic.online
+static-chic.online -> frontend 
+
 # TODO
 
 - cloudfront
@@ -48,3 +52,6 @@ curl -X POST \
 - Github authentication
 - deploy CLI
 - frontend
+- DELETE deployments
+- DELETE site
+- Cloudfront distro template, new distro for each site

@@ -5,16 +5,24 @@ service: static-chic
 stages:
   default:
     params:
+      # A hosted zone for param:baseDomain.
+      # Because the same hostedzone is used for all envrionments,
+      # it has to be created outside of this CF template and it's
+      # ID needs to be put here.
+      hostedZoneId: Z0815807GYU44VR2QYOU
+      baseDomain: static-chic.online
       tablePrefix: "${self:org}-${self:app}-${sls:stage}"
-      domain: ${sls:stage}.static-chic.online
+      apiDomain: api.${sls:stage}.${param:baseDomain}
+      sitesDomain: sites.${sls:stage}.${param:baseDomain}
   prod:
     params:
-      domain: static-chic.online
+      apiDomain: api.${param:baseDomain}
+      sitesDomain: sites.${param:baseDomain}
 
 provider:
   name: aws
   runtime: nodejs22.x
-  domain: ${param:domain}
+  domain: ${param:apiDomain}
   iam:
     role:
       statements:
@@ -51,6 +59,7 @@ provider:
   environment:
     TABLE_PREFIX: ${param:tablePrefix}
     NODE_ENV: ${sls:stage}
+    HOSTNAME: ${param:apiDomain}
 
 functions:
   api:
@@ -102,3 +111,69 @@ resources:
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
         TableName: ${param:tablePrefix}-deployments
+    SiteDomain:
+      Type: AWS::Route53::RecordSet
+      Properties: 
+        HostedZoneId: ${param:hostedZoneId}
+        Name: ${param:sitesDomain}
+        Type: CNAME
+        TTL: "300"
+        ResourceRecords:
+          - "example.com" # TODO
+          # - Fn::GetAtt: [CloudfrontDistro, Arn]
+    SiteCertificate:
+      Type: AWS::CertificateManager::Certificate
+      Properties:
+        DomainName: ${param:sitesDomain}
+        SubjectAlternativeNames:
+          - "*.${param:sitesDomain}"
+        ValidationMethod: DNS
+        DomainValidationOptions:
+          - DomainName: ${param:sitesDomain}
+            HostedZoneId: ${param:hostedZoneId}
+    # CloudfrontDistro:
+    #   Type: AWS::CloudFront::Distribution
+    #   Properties:
+    #     DistributionConfig:
+    #       ConnectionMode: tenant-only
+    #       DefaultRootObject: "index.html"
+    #       # HttpVersion: http2and3
+    #       Enabled: Yes
+    #       DefaultCacheBehavior:
+    #         TargetOriginId:
+    #           - Fn::GetAtt: [DeploymentBucket, Arn]
+    #         ViewerProtocolPolicy: allow-all
+    #         AllowedMethods: [GET, HEAD]
+    #         # CachePolicyId ?
+    #       Origins:
+    #         - 
+    #           # DomainName: 
+    #           Id:
+    #             - Fn::GetAtt: [DeploymentBucket, Arn]
+    #           OriginPath: "sites/{{siteId}}/content"
+    #           S3OriginConfig:
+    #             OriginAccessIdentity: '' # TODO: create
+    #       ViewerCertificate:
+    #         AcmCertificateArn:
+    #           - Fn::GetAtt: [SiteCertificate, Arn]
+    #         MinimumProtocolVersion: TLSv1.2_2021
+    #         SSLSupportMethod: sni-only
+
+
+
+# "MyDistributionTenant": {
+#       "Type": "AWS::CloudFront::DistributionTenant",
+#       "Properties": {
+#         "Domains": [
+#           "my-distribution-tenant.example.com"
+#         ],
+#         "DistributionId": "MyMultiTenantDistribution.Id",
+#         "Name": "MyDistributionTenant",
+#         "Enabled": true,
+#         "Parameters": [
+#           {
+#             "Name": "tenantName",
+#             "Value": "first-user"
+#           }
+#         ]
+#       }
