@@ -41,7 +41,6 @@ const generateDeployId = () => {
   return Buffer.concat([timestamp, rand]).toString('hex')
 }
 
-
 exports.createUser = async ({ userId, name }) => {
   return await db.create('users', {
     userId,

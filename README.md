@@ -41,7 +41,6 @@ curl -X POST \
 
 # TODO
 
-- vcr tests
 - cloudfront
 - custom domains
 - deploy keys

@@ -1,4 +1,4 @@
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb')
+const { DynamoDBClient, ResourceNotFoundException } = require('@aws-sdk/client-dynamodb')
 
 const {
   DynamoDBDocumentClient,
@@ -26,8 +26,15 @@ exports.show = async (table, key) => {
     TableName: `${tablePrefix}-${table}`,
     Key: key // e.g. { userId }
   })
-  const { Item } = await docClient.send(command)
-  return Item
+  try {
+    const { Item } = await docClient.send(command)
+    return Item
+  } catch (err) {
+    if (err instanceof ResourceNotFoundException) {
+      return null
+    }
+    throw err
+  }
 }
 
 // Return an efficient page of results by filtering to partitionKey and ordering
