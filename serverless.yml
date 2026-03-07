@@ -1,9 +1,6 @@
-# "org" ensures this Service is used with the correct Serverless Framework Access Key.
 org: rabidaudio
-# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
-app: cheap-static-sites
-# "service" is the name of this project. This will also be added to your AWS resource names.
-service: cheap-static-sites
+app: static-chic
+service: static-chic
 
 stages:
   default:
@@ -17,9 +14,7 @@ stages:
 provider:
   name: aws
   runtime: nodejs22.x
-  # domains:
-  #   - ${param:domain}
-  #   - "*.${param:domain}"
+  domain: ${param:domain}
   iam:
     role:
       statements:

@@ -1,4 +1,4 @@
-# cheap-static-sites
+# static-chic.online
 
 A multi-tenant static site host. Sites are stored in S3 buckets and served via CloudFront. Supports custom domains and arbitrary rollbacks.
 
@@ -19,7 +19,7 @@ curl -X POST \
     \                                       # and promotion of sites but no other permissions (for automation)
     -H 'Content-Type: application/gzip' \   # your compiled site content should be uploaded
     --data-binary @mysite.tar.gz \          # as the binary body of the request in a gzipped tarball
-    /sites/:siteId/deployments
+    https://static-chic.online/sites/:siteId/deployments
 # 200 Response: {
 #     "status": "OK",
 #     "data": {
@@ -34,16 +34,13 @@ curl -X POST \
 curl -X POST \
     -H 'Authorization: Bearer <token>' \
     -H 'Deploy-Key: <deploy key>' \
-    /sites/:siteId/deployments/:deploymentId/promote
+    https://static-chic.online/sites/:siteId/deployments/:deploymentId/promote
 
 # Rollback is as simple as promoting a previous deployment
 ```
 
 # TODO
 
-- bug in untar, inconsistent repro
-- switch to koa
-- domain and app name
 - vcr tests
 - cloudfront
 - custom domains
