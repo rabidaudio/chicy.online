@@ -119,8 +119,7 @@ resources:
         Type: CNAME
         TTL: "300"
         ResourceRecords:
-          - "example.com" # TODO
-          # - Fn::GetAtt: [CloudfrontDistro, Arn]
+          - Fn::GetAtt: [CloudfrontDistro, DomainName]
     SiteCertificate:
       Type: AWS::CertificateManager::Certificate
       Properties:
@@ -131,33 +130,77 @@ resources:
         DomainValidationOptions:
           - DomainName: ${param:sitesDomain}
             HostedZoneId: ${param:hostedZoneId}
-    # CloudfrontDistro:
-    #   Type: AWS::CloudFront::Distribution
-    #   Properties:
-    #     DistributionConfig:
-    #       ConnectionMode: tenant-only
-    #       DefaultRootObject: "index.html"
-    #       # HttpVersion: http2and3
-    #       Enabled: Yes
-    #       DefaultCacheBehavior:
-    #         TargetOriginId:
-    #           - Fn::GetAtt: [DeploymentBucket, Arn]
-    #         ViewerProtocolPolicy: allow-all
-    #         AllowedMethods: [GET, HEAD]
-    #         # CachePolicyId ?
-    #       Origins:
-    #         - 
-    #           # DomainName: 
-    #           Id:
-    #             - Fn::GetAtt: [DeploymentBucket, Arn]
-    #           OriginPath: "sites/{{siteId}}/content"
-    #           S3OriginConfig:
-    #             OriginAccessIdentity: '' # TODO: create
-    #       ViewerCertificate:
-    #         AcmCertificateArn:
-    #           - Fn::GetAtt: [SiteCertificate, Arn]
-    #         MinimumProtocolVersion: TLSv1.2_2021
-    #         SSLSupportMethod: sni-only
+    # A user that CloudFront can use to read from the bucket
+    AccessIdentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: ${param:sitesDomain}
+    # A policy that allows AccessIdentity to read the contents of DeploymentBucket
+    BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: DeploymentBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Id: PolicyForCloudFrontPrivateContent
+          Statement:
+            - Sid: AllowCloudFrontServicePrincipal
+              Effect: Allow
+              Principal:
+                Service: cloudfront.amazonaws.com
+              Action: s3:GetObject
+              Resource:
+                - Fn::Join:
+                  - '/'
+                  - - Fn::GetAtt: [DeploymentBucket, Arn]
+                    - "sites"
+                    - "*"
+              Condition:
+                ArnLike:
+                  AWS:SourceArn:
+                    - Fn::Join:
+                      - '/'
+                      - - "arn:aws:cloudfront::*:distribution"
+                        - Ref: CloudfrontDistro
+    # A multi-tenant CloudFront distribution. Tenants will be added to it dynamically
+    CloudfrontDistro:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          ConnectionMode: tenant-only
+          DefaultRootObject: "index.html"
+          # HttpVersion: http2and3
+          Enabled: true
+          DefaultCacheBehavior:
+            TargetOriginId:
+              Fn::GetAtt: [DeploymentBucket, Arn]
+            ViewerProtocolPolicy: allow-all
+            AllowedMethods: [GET, HEAD]
+            # "CachingOptimized" default cache policy, recommended for S3
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          TenantConfig: 
+            ParameterDefinitions:
+              - Name: siteId
+                Definition:
+                  StringSchema:
+                    Comment: "Site ID"
+                    DefaultValue: "root"
+                    Required: false
+          Origins:
+            - DomainName:
+                Fn::GetAtt: [DeploymentBucket, RegionalDomainName]
+              Id:
+                Fn::GetAtt: [DeploymentBucket, Arn]
+              OriginPath: '/sites/{{siteId}}/content'
+              S3OriginConfig:
+                OriginAccessIdentity: ""
+          ViewerCertificate:
+            AcmCertificateArn:
+              Ref: SiteCertificate
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
 
 
 
