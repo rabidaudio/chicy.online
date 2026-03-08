@@ -19,7 +19,7 @@ curl -X POST \
     \                                       # and promotion of sites but no other permissions (for automation)
     -H 'Content-Type: application/gzip' \   # your compiled site content should be uploaded
     --data-binary @mysite.tar.gz \          # as the binary body of the request in a gzipped tarball
-    https://static-chic.online/sites/:siteId/deployments
+    https://api.static-chic.online/sites/:siteId/deployments
 # 200 Response: {
 #     "status": "OK",
 #     "data": {
@@ -34,7 +34,7 @@ curl -X POST \
 curl -X POST \
     -H 'Authorization: Bearer <token>' \
     -H 'Deploy-Key: <deploy key>' \
-    https://static-chic.online/sites/:siteId/deployments/:deploymentId/promote
+    https://api.static-chic.online/sites/:siteId/deployments/:deploymentId/promote
 
 # Rollback is as simple as promoting a previous deployment
 ```
@@ -55,3 +55,7 @@ static-chic.online -> frontend
 - DELETE deployments
 - DELETE site
 - Cloudfront distro template, new distro for each site
+- add Tags to everything for cost tracking
+
+
+https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html

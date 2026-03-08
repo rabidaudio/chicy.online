@@ -23,6 +23,9 @@ provider:
   name: aws
   runtime: nodejs22.x
   domain: ${param:apiDomain}
+  stackTags:
+    app: ${self:app}
+    stage: ${sls:stage}
   iam:
     role:
       statements:
@@ -60,6 +63,10 @@ provider:
     TABLE_PREFIX: ${param:tablePrefix}
     NODE_ENV: ${sls:stage}
     HOSTNAME: ${param:apiDomain}
+    APP_NAME: ${self:app}
+    STAGE: ${sls:stage}
+    SITES_DOMAIN: ${param:sitesDomain}
+    HOSTED_ZONE_ID: ${param:hostedZoneId}
 
 functions:
   api:
@@ -69,11 +76,7 @@ functions:
 
 resources:
   Resources:
-    DeploymentBucket:
-      Type: AWS::S3::Bucket
-      DeletionPolicy: Retain
-      Properties:
-        BucketName: ${param:tablePrefix}
+    # DynamoDB Tables
     UsersTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -124,31 +127,12 @@ resources:
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
         TableName: ${param:tablePrefix}-deployments
-    SiteDomain:
-      Type: AWS::Route53::RecordSet
-      Properties: 
-        HostedZoneId: ${param:hostedZoneId}
-        Name: ${param:sitesDomain}
-        Type: CNAME
-        TTL: "300"
-        ResourceRecords:
-          - Fn::GetAtt: [CloudfrontDistro, DomainName]
-    SiteCertificate:
-      Type: AWS::CertificateManager::Certificate
+    # S3 Bucket 
+    DeploymentBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
       Properties:
-        DomainName: ${param:sitesDomain}
-        SubjectAlternativeNames:
-          - "*.${param:sitesDomain}"
-        ValidationMethod: DNS
-        DomainValidationOptions:
-          - DomainName: ${param:sitesDomain}
-            HostedZoneId: ${param:hostedZoneId}
-    # A user that CloudFront can use to read from the bucket
-    AccessIdentity:
-      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-      Properties:
-        CloudFrontOriginAccessIdentityConfig:
-          Comment: ${param:sitesDomain}
+        BucketName: ${param:tablePrefix}
     # A policy that allows AccessIdentity to read the contents of DeploymentBucket
     BucketPolicy:
       Type: AWS::S3::BucketPolicy
@@ -177,19 +161,31 @@ resources:
                       - '/'
                       - - "arn:aws:cloudfront::*:distribution"
                         - Ref: CloudfrontDistro
+    # Access control to allow cloudfront to access data in the bucket
+    OAC:
+      Type: AWS::CloudFront::OriginAccessControl
+      Properties: 
+        OriginAccessControlConfig: 
+            Name: ${param:tablePrefix}
+            OriginAccessControlOriginType: s3
+            SigningBehavior: always
+            SigningProtocol: sigv4
     # A multi-tenant CloudFront distribution. Tenants will be added to it dynamically
     CloudfrontDistro:
       Type: AWS::CloudFront::Distribution
       Properties:
+        Tags:
+          - Key: Name
+            Value: ${param:tablePrefix}
         DistributionConfig:
           ConnectionMode: tenant-only
           DefaultRootObject: "index.html"
-          # HttpVersion: http2and3
+          HttpVersion: http2and3
           Enabled: true
           DefaultCacheBehavior:
             TargetOriginId:
               Fn::GetAtt: [DeploymentBucket, Arn]
-            ViewerProtocolPolicy: allow-all
+            ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD]
             # "CachingOptimized" default cache policy, recommended for S3
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
@@ -206,28 +202,73 @@ resources:
                 Fn::GetAtt: [DeploymentBucket, RegionalDomainName]
               Id:
                 Fn::GetAtt: [DeploymentBucket, Arn]
-              OriginPath: '/sites/{{siteId}}/content'
+              OriginAccessControlId:
+                Ref: OAC
               S3OriginConfig:
                 OriginAccessIdentity: ""
+              OriginPath: '/sites/{{siteId}}/content'
           ViewerCertificate:
             AcmCertificateArn:
               Ref: SiteCertificate
             MinimumProtocolVersion: TLSv1.2_2021
             SslSupportMethod: sni-only
+    # AWS can create a default connection group, but we need
+    # to make one to reference the domain
+    CloudfrontDistroDefaultConnectionGroup:
+      Type: AWS::CloudFront::ConnectionGroup
+      Properties:
+        Enabled: true
+        Ipv6Enabled: true
+        Name: ${param:tablePrefix}-default
+    SiteDomain:
+      Type: AWS::Route53::RecordSet
+      Properties: 
+        HostedZoneId: ${param:hostedZoneId}
+        Name: ${param:sitesDomain}
+        Type: A
+        AliasTarget:
+          HostedZoneId: Z2FDTNDATAQYW2 # A special HostedZone for CF
+          EvaluateTargetHealth: false
+          DNSName:
+            Fn::GetAtt: [CloudfrontDistroDefaultConnectionGroup, RoutingEndpoint]
+    # A default certificate to use for sites
+    SiteCertificate:
+      Type: AWS::CertificateManager::Certificate
+      Properties:
+        DomainName: ${param:sitesDomain}
+        SubjectAlternativeNames:
+          - "*.${param:sitesDomain}"
+        ValidationMethod: DNS
+        DomainValidationOptions:
+          - DomainName: ${param:sitesDomain}
+            HostedZoneId: ${param:hostedZoneId}
+
     # TEST
-    # MyDistributionTenant:
-    #   Type: AWS::CloudFront::DistributionTenant
-    #   Properties:
-    #     Domains:
-    #       - "#{}"
-    #       # - # <customDomain>
-    #     DistributionId: <distroID>
-    #     Name: <siteName>
-    #     Enabled: true
-    #     Parameters:
-    #       Name: siteId
-    #       Value: <siteId>
-    #     # if custom domain
-    #     ManagedCertificateRequest:
-    #       PrimaryDomainName: # <customDomain>
-    #       ValidationTokenHost: cloudfront
+    MyDistributionTenant:
+      Type: AWS::CloudFront::DistributionTenant
+      Properties:
+        Enabled: true
+        ConnectionGroupId:
+          Fn::GetAtt: [CloudfrontDistroDefaultConnectionGroup, Id]
+        Domains:
+          - "ride-impede-dwoxv.${param:sitesDomain}"
+          - "test-site.rabid.audio"
+        DistributionId:
+          Ref: CloudfrontDistro
+        Name: ride-impede-dwoxv
+        Parameters:
+          - Name: siteId
+            Value: ride-impede-dwoxv
+        # if custom domain
+        ManagedCertificateRequest:
+          PrimaryDomainName: test-site.rabid.audio
+          ValidationTokenHost: cloudfront
+    MyDistributionTenantDomain:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        HostedZoneId: ${param:hostedZoneId}
+        Name: "ride-impede-dwoxv.${param:sitesDomain}"
+        Type: CNAME
+        TTL: 300
+        ResourceRecords:
+          - Fn::GetAtt: [CloudfrontDistroDefaultConnectionGroup, RoutingEndpoint]
