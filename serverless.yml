@@ -28,10 +28,13 @@ provider:
   stackTags:
     app: ${self:app}
     stage: ${sls:stage}
-  package:
-    patterns:
-      - src/**
-      - handler.js
+  ecr:
+    images:
+      # NOTE: docker with buildx needs to be installed locally
+      appimg:
+        path: .
+        platform: linux/amd64
+        provenance: false
   iam:
     role:
       statements:
@@ -81,7 +84,8 @@ provider:
 
 functions:
   api:
-    handler: handler.handler
+    image:
+      name: appimg
     events:
       - httpApi: "*"
 

@@ -55,3 +55,4 @@ static-chic.online -> frontend
 - deploy CLI
 - frontend
 - add Tags to everything for cost tracking
+- flag for private-only in sls to disable github logins
