@@ -4,7 +4,7 @@ const { hideBin } = require('yargs/helpers')
 const app = require('./app')
 
 function main () {
-  yargs(hideBin(process.argv))
+  let cli = yargs(hideBin(process.argv))
     .scriptName('manage')
     .command('get_user <username>', 'check the status of a user', (yargs) => {
       return yargs.positional('username', { describe: 'the unique username of the user' })
@@ -55,14 +55,14 @@ function main () {
         // TODO: custom domain
         .option('wait', {
           alias: 'w',
-          describe: "wait for the CloudFront distribution to activate",
+          describe: 'wait for the CloudFront distribution to activate'
         })
         .demandOption(['owner', 'name'])
     }, async ({ owner, name, wait }) => {
       const site = await app.createSite({ name, userId: owner })
       console.log(site)
       if (wait) {
-        console.log("waiting...")
+        console.log('waiting...')
         await app.waitForStack(site, (status) => console.log(status))
       }
     })
@@ -81,7 +81,7 @@ function main () {
         })
         .option('wait', {
           alias: 'w',
-          describe: "wait for the CloudFront distribution to activate",
+          describe: 'wait for the CloudFront distribution to activate'
         })
         .demandOption(['site', 'domain'])
     }, async ({ site, domain, wait }) => {
@@ -171,7 +171,13 @@ function main () {
       }
     })
 
-    .help('h')
+  if (process.env.NODE_ENV === 'dev') {
+    cli = cli.command('wipe_everything', 'delete all sites, deployments, and users', (yargs) => yargs, async (argv) => {
+      await app.wipeEverything()
+    })
+  }
+
+  cli.help('h')
     .alias('h', 'help')
     .demandCommand(1, 1, 'command required')
     .parse()

@@ -8,7 +8,7 @@ const { Upload } = require('@aws-sdk/lib-storage')
 
 const client = new S3Client()
 
-const bucketName = process.env.TABLE_PREFIX
+const bucketName = process.env.BUCKET_NAME
 
 exports.upload = async (path, file, { contentType } = {}) => {
   const params = {

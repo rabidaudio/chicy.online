@@ -52,7 +52,12 @@ router.post('/sites/:siteId/deployments', async (ctx) => {
   ctx.body = { status: 'OK', data: deployment }
 })
 
-// router.get('/sites/:siteId/deployments/:deploymentId', async (ctx) => {})
+router.get('/sites/:siteId/deployments/:deploymentId', async (ctx) => {
+  const siteId = ctx.params.siteId
+  const deploymentId = ctx.params.deploymentId
+  const deployment = await app.getDeployment({ siteId, deploymentId })
+  ctx.body = { status: 'OK', data: deployment }
+})
 
 router.post('/sites/:siteId/deployments/:deploymentId/promote', async (ctx) => {
   const siteId = ctx.params.siteId
@@ -60,6 +65,13 @@ router.post('/sites/:siteId/deployments/:deploymentId/promote', async (ctx) => {
   const site = await app.promoteDeployment({ siteId, deploymentId })
   const { currentDeployment, deployedAt } = site
   ctx.body = { status: 'OK', data: { siteId, currentDeployment, deployedAt } }
+})
+
+router.delete('/sites/:siteId', async (ctx) => {
+  const siteId = ctx.params.siteId
+
+  await app.deleteSite(siteId)
+  ctx.body = { status: 'OK', data: { siteId } }
 })
 
 server.use(router.routes()).use(router.allowedMethods())

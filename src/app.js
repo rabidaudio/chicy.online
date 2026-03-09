@@ -17,11 +17,12 @@ const s3 = require('./s3')
 const delay = async (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // where deployments are stored on S3
+const siteDeploymentsKeyPrefix = (siteId) => `deployments/${siteId}`
 const deploymentTarballKey = (siteId, deploymentId) =>
-  `deployments/${siteId}/${deploymentId}.tar.gz`
+  `${siteDeploymentsKeyPrefix(siteId)}/${deploymentId}.tar.gz`
 
 // where live site content is stored on S3
-const siteContentKeyPrefix = (siteId) => `sites/${siteId}/content/`
+const siteContentKeyPrefix = (siteId) => `sites/${siteId}/content`
 
 // generate a unique human-friendly id for each site to be used
 // as a subdomain.
@@ -64,7 +65,7 @@ exports.getUser = async (userId) => {
 // a userId which owns it.
 exports.createSite = async ({ name, userId }) => {
   const siteId = generateSiteId()
-  console.log("generating", siteId)
+  console.log('generating', siteId)
 
   const { stackId, operationId } = await cform.createSite({ siteId })
 
@@ -86,7 +87,7 @@ exports.createSite = async ({ name, userId }) => {
 //   while (true) {
 //     const operation = await cform.getStackStatus(site.siteId, site.latestOperationId)
 //     callback(operation.Status)
-    
+
 //     switch (operation.Status) {
 //       case 'SUCCEEDED': return operation
 //       case 'FAILED': throw new Error("Stack failed") // TODO: get error info
@@ -112,7 +113,7 @@ exports.setSiteCustomDomain = async (siteId, customDomain) => {
   const updatedSite = await db.create('sites', {
     ...site,
     customDomain,
-    latestOperationId: operationId,
+    latestOperationId: operationId
   })
 
   return { ...updatedSite, deployKey: '<obfuscated>' }
@@ -125,6 +126,10 @@ exports.listSitesForUser = async (userId) => {
 
 exports.listDeployments = async (siteId) => {
   return await db.query('deployments', { siteId }, { asc: false })
+}
+
+exports.getDeployment = async ({ siteId, deploymentId }) => {
+  return await db.get('deployments', { siteId, deploymentId })
 }
 
 // create a new deployment for a site.
@@ -155,7 +160,7 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
 
   // in order to unzip the tarball in place, we need to download it, extract it
   // locally, and upload each file one at a time.
-  const tmpDir = await mkdtemp(path.join(tmpdir(), `${process.env.TABLE_PREFIX}-`))
+  const tmpDir = await mkdtemp(path.join(tmpdir(), `${process.env.APP_ID}-`))
   const tarballPath = deploymentTarballKey(siteId, deploymentId)
   console.log('downloading', tarballPath, 'to', tmpDir)
   const tarball = await s3.download(tarballPath)
@@ -194,6 +199,26 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
   })
 }
 
+exports.deleteSite = async (siteId) => {
+  const deleteDeploymentsForSite = async (siteId) => {
+    for (const { deploymentId } in await db.query('deployments', { siteId })) {
+      await db.delete('deployments', { siteId, deploymentId })
+    }
+  }
+  await Promise.all([
+    // remove domain + distro
+    cform.deleteStack(siteId).then(() => console.log(`[${siteId}] deleted CloudFormation stack`)),
+    // delete data from S3
+    s3.deleteRecursive(siteContentKeyPrefix(siteId)).then(() => console.log(`[${siteId}] deleted site content`)),
+    s3.deleteRecursive(siteDeploymentsKeyPrefix(siteId)).then(() => console.log(`[${siteId}] deleted deployment data`)),
+    // delete all deployments from db
+    deleteDeploymentsForSite(siteId).then(() => console.log(`[${siteId}] deleted deployment history`)),
+    // delete site from db
+    db.delete('sites', { siteId }).then(() => console.log(`[${siteId}] deleted site`))
+  ])
+  console.log('site removed', siteId)
+}
+
 exports.awaitInvalidationComplete = async ({ siteId, deploymentId }) => {
   const site = await db.show('sites', { siteId })
   const deployment = await db.show('deployments', { siteId, deploymentId })
@@ -212,4 +237,17 @@ exports.createTarball = async (directoryPath) => {
   const filesInDirectory = await Array.fromAsync(glob(path.join(directoryPath, '*')))
   const relativeFiles = filesInDirectory.map((item) => path.relative(directoryPath, item))
   return ReadableStream.from(tar.create({ cwd: directoryPath, gzip: true }, relativeFiles))
+}
+
+exports.wipeEverything = async () => {
+  if (process.env.NODE_ENV !== 'dev') throw new Error('Can only destroy dev environments')
+
+  await s3.deleteRecursive('')
+  for await (const { siteId } of db.scan('sites')) {
+    await this.deleteSite(siteId)
+  }
+  for await (const { userId } of db.scan('users')) {
+    await db.delete('users', { userId })
+    console.log('deleted user', userId)
+  }
 }

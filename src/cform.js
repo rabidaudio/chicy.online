@@ -4,7 +4,9 @@ const path = require('node:path')
 const {
   CloudFormationClient,
   CreateStackCommand,
-  UpdateStackCommand
+  UpdateStackCommand,
+  DeleteStackCommand,
+  StackNotFoundException
 } = require('@aws-sdk/client-cloudformation')
 
 const client = new CloudFormationClient()
@@ -43,7 +45,7 @@ const generateSiteParameters = ({ siteId, customDomain }) => ([
   }
 ])
 
-const generateStackName = (siteId) => `${process.env.TABLE_PREFIX}-${siteId}`
+const generateStackName = (siteId) => `${process.env.APP_ID}-${siteId}`
 
 exports.createSite = async ({ siteId, customDomain }) => {
   const params = {
@@ -89,4 +91,15 @@ exports.updateParams = async (stackId, { siteId, customDomain }) => {
 
 // TODO: get events
 
-// TODO: delete stack
+exports.deleteStack = async (siteId) => {
+  try {
+    await client.send(new DeleteStackCommand({
+      StackName: generateStackName(siteId)
+    }))
+  } catch (err) {
+    if (err instanceof StackNotFoundException) {
+      return
+    }
+    throw err
+  }
+}

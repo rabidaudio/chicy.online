@@ -45,8 +45,6 @@ static-chic.online -> frontend
 
 # TODO
 
-- DELETE deployments
-- DELETE site
 - logger
 - exclude on zip
 - rename db create to put
@@ -57,6 +55,3 @@ static-chic.online -> frontend
 - deploy CLI
 - frontend
 - add Tags to everything for cost tracking
-
-
-https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
