@@ -5,6 +5,7 @@ const { glob, mkdtemp, stat } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { pipeline } = require('node:stream/promises')
 
+const mime = require('mime-types')
 const namor = require('namor')
 const tar = require('tar')
 
@@ -113,7 +114,7 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
   console.log('downloading', tarballPath, 'to', tmpDir)
   const tarball = await s3.download(tarballPath)
   const extract = tar.extract({ cwd: tmpDir, strict: true, onReadEntry: console.log.bind(console) })
-  console.log('extracting tarball', extract)
+  console.log('extracting tarball')
   await pipeline(tarball, extract) // wait for extraction to complete
 
   console.log('deleting live site', siteContentPath)
@@ -125,8 +126,11 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
     const s = await stat(entry)
     if (!s.isDirectory()) {
       const key = path.join(siteContentPath, path.relative(tmpDir, entry))
-      console.log('upload', entry, key)
-      await s3.upload(key, createReadStream(entry))
+      // if we don't specify the content type, CF will send it as a binary file
+      // and the browser will simply download it
+      const contentType = mime.contentType(path.extname(entry))
+      console.log('upload', contentType, entry, key)
+      await s3.upload(key, createReadStream(entry), { contentType })
     }
   }
 

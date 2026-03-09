@@ -49,6 +49,62 @@ function main () {
       const site = await app.createSite({ name: argv.name, userId: argv.owner })
       console.log(site)
     })
+
+    .command('deploy [path]', 'create a deployment to the given site', (yargs) => {
+      return yargs
+        .example("deploy myapp/dist --site [siteId] --exclude '**/*.test.js'")
+        .positional('path', { describe: 'The path to the root directory of static files' })
+        .option('site', {
+          alias: 's',
+          describe: 'the siteId to deploy to'
+        })
+        .option('exclude', {
+          alias: 'x',
+          describe: 'a glob of files relative to `path` to exclude',
+          type: 'array',
+          default: []
+        })
+        .option('promote', {
+          alias: 'p',
+          describe: "Also promote the deployment.\nA deployment isn't automatically promoted to live by default",
+          type: 'boolean'
+        })
+        .demandOption(['site'])
+    }, async (argv) => {
+      console.log("zipping and uploading...")
+      const contentTarball = await app.createTarball(argv.path) // TODO: exclude
+      const deployment = await app.createDeployment({ siteId: argv.site, contentTarball })
+      console.log(deployment)
+      if (argv.promote) {
+        console.log("promoting...")
+        const site = await app.promoteDeployment(deployment)
+        console.log(site)
+      }
+    })
+
+    .command([
+      'promote [siteId] [deploymentId]',
+      'rollback [siteId] [deploymentId]'
+    ], 'make the distribution live', (yargs) => {
+      return yargs
+        .positional('siteId')
+        .positional('deploymentId')
+        .option('wait', {
+          alias: 'w',
+          describe: "wait for the invalidation to complete",
+          type: "boolean",
+        })
+    }, async (argv) => {
+        console.log(argv)
+        const { siteId, deploymentId } = argv
+        console.log("promoting...")
+        const site = await app.promoteDeployment({ siteId, deploymentId })
+        console.log(site)
+        if (argv.wait) {
+          // TODO: wait until invalidation complete
+        }
+    })
+
     .help('h')
     .alias('h', 'help')
     .demandCommand(1, 1, 'command required')

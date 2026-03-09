@@ -13,13 +13,18 @@
     "@aws-sdk/lib-dynamodb": "^3.585.0",
     "@aws-sdk/lib-storage": "^3.1004.0",
     "@koa/router": "^15.3.1",
+    "cf-doh": "^1.1.1",
     "koa": "^3.1.2",
+    "mime-types": "^3.0.2",
+    "multicast-dns": "^7.2.5",
     "namor": "^3.0.3",
     "serverless-http": "^3.2.0",
     "tar": "^7.5.10",
     "yargs": "^18.0.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-cloudformation": "^3.1004.0",
+    "@aws-sdk/client-cloudfront": "^3.1004.0",
     "@dotenvx/dotenvx": "^1.54.1",
     "chai": "^6.2.2",
     "fetch-vcr": "^3.2.0",

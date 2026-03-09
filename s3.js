@@ -10,12 +10,13 @@ const client = new S3Client()
 
 const bucketName = process.env.TABLE_PREFIX
 
-exports.upload = async (path, file) => {
+exports.upload = async (path, file, { contentType } = {}) => {
   const params = {
     Bucket: bucketName,
     Key: path,
     Body: file
   }
+  if (contentType) params.ContentType = contentType
   const task = new Upload({ client, params })
   await task.done()
 }
