@@ -6,6 +6,92 @@ const chalk = require('chalk')
 const isInteractive = require('is-interactive').default()
 const supportsColor = require('supports-color').default.stdout
 
+// cmd is a middleware pattern for orchestrating cli commands
+const cmd = function(initialMiddleware = async (argv, next) => next(argv)) {
+    const _cmd = async (argv) => {
+        const cont = (rem) => async (...args) => {
+            if (rem.length === 0) return
+            const [m, ...rest] = rem
+            return await m((args.length >= 1 ? args[0] : argv), cont(rest))
+        }
+        return await cont(_cmd._middleware)(argv)
+    }
+    _cmd._middleware = [initialMiddleware]
+    _cmd.use = (middleware) => {
+        _cmd._middleware.push(middleware)
+        return _cmd
+    }
+    return _cmd
+}
+
+//     for (const [name, extension] of Object.entries(cmd.extensions)) {
+//         _cmd.
+//     }
+// cmd.extensions = []
+// cmd.extend = (extender) => cmd.extensions.push(extender)
+
+
+// cli.extend({
+//     demandOption: (name, checkFn = (v) => !!v) => async (argv, next) => {
+//         if (!checkFn(argv[name])) {
+//             console.error(`Missing required argument: ${name}`)
+//             process.exit(1)
+//         } else {
+//             return await next(argv)
+//         }
+//     },
+// })
+
+const.demandOption = (name, checkFn = (v) => !!v) => a
+
+const requestOption = (option, requestFn) => async (argv, next) => {
+    if (argv[option]) return await next()
+    const resolved = await requestFn(argv)
+    return await next({ ...argv, [option]: resolved })
+}
+})
+
+// const cli = function () { // TODO: allow specifying first use as argument
+//     const fn = async (argv) => {
+//         // Top invoke
+//         console.log('top invoke', argv, fn._next)
+//         if (fn._next)
+//             return await fn._next(argv)
+//     }
+//     fn._next = null
+//     const attachUse = (fn) => {
+//         fn.use = function (middleware) {
+//             // set fn.next to be this
+//             fn._next = async function (argv) {
+//                 console.log('invoke middleware', argv)
+//                 const next = this._next || (async (_argv) => {})
+//                 return await middleware(argv, async () => next(argv))
+//             }
+//             // set fn.use to be this function's use
+//             fn.use = attachUse(fn._next)
+//         }        
+//     }
+//     attachUse(fn)
+//     return fn
+// }
+
+    // .chain(authenticate)
+    // .requestOption('site', async () => {
+
+    // })
+    // .demandOption('site')
+    // .chain(async (argv, next) => {
+
+    // })
+
+// const cli = new CLI(yargs)
+//     .cmd('init', authenticate, requireSite, async ({ name }) => {
+//         // authenticate
+//         // new site (--name or interactive or null)
+//         // return new subdomain+deploy_key
+//     })
+
+
 const authenticate = async () => {
   // check auth token in localStorage
   //  exists? return it
@@ -14,13 +100,40 @@ const authenticate = async () => {
   // TODO: support non-interactive registration?
 }
 
-const failRequiredArg = (name) => {
-  console.error(`Missing required argument: ${name}`)
-  process.exit(1)
+const demandOption = (name, checkFn = (v) => !!v) => async (argv, next) => {
+    if (!checkFn(argv[name])) {
+        console.error(`Missing required argument: ${name}`)
+        process.exit(1)
+    } else {
+        return await next(argv)
+    }
 }
 
+const requestOption = (option, requestFn) => async (argv, next) => {
+    if (argv[option]) return await next()
+    const resolved = await requestFn(argv)
+    return await next({ ...argv, [option]: resolved })
+}
+
+const requestSite = requestOption('site', async () => {
+    if (isInteractive) {
+        // TODO: get the user's sites
+        return await prompts.select({
+            message: 'Select a site',
+            choices: [
+                { name: 'Test Site [teeny-angle-dwas5]', value: 'teeny-angle-dwas5', description: 'created today' },
+                { name: 'Test Site 2 [example.com]', value: 'foo-bar-baz', description: 'updated 1 year ago' }
+            ]
+            })
+    }
+})
+
+const requestDeployment = requestOption('deployment', async () => {
+
+})
+
 module.exports = async function main () {
-  const cli = yargs(hideBin(process.argv))
+  const yargs = yargs(hideBin(process.argv))
     .scriptName('statchic') // TODO
     .usage(`${chalk.bold('$0')}   ` +
         chalk.green('Create and deploy static sites on', chalk.underline('static-chic.online') + '.\n\n') +
@@ -46,34 +159,17 @@ module.exports = async function main () {
         'pointing this domain to the default domain for the site before you can attach it to the site. ' +
         'Contact your DNS provider for directions.\n\n')
     )
-
-  // if `option` is not specified, try getting it from defaultFn.
-  // will automatically unwrap the promise
-  cli.unwrappedDefault = function (option, defaultFn, defaultMsg) {
-    return this.default(option, defaultFn, defaultMsg)
-      .coerce(option, async (arg) => (await arg))
-  }
-  cli.siteOption = function () {
+  yargs.siteOption = function () {
     return this.option('site', {
       alias: 's',
       type: 'string',
       describe: 'The site subdomain, e.g. `teeny-angle-dwas5`'
     }).unwrappedDefault('site', async () => {
       if (process.env.SC_SITE_ID) return process.env.SC_SITE_ID
-      if (isInteractive) {
-        // TODO: get the user's sites
-        return await prompts.select({
-          message: 'Select a site',
-          choices: [
-            { name: 'Test Site [teeny-angle-dwas5]', value: 'teeny-angle-dwas5', description: 'created today' },
-            { name: 'Test Site 2 [example.com]', value: 'foo-bar-baz', description: 'updated 1 year ago' }
-          ]
-        })
-      }
     }, '$SC_SITE_ID').demandOption('site')
   }
 
-  cli.command('init', chalk.bold('Create a new site.'), y =>
+  yargs.command('init', chalk.bold('Create a new site.'), y =>
     y.option('name', {
       alias: 'n',
       describe: 'A name for the site'
@@ -82,7 +178,7 @@ module.exports = async function main () {
         return await prompts.input({ message: 'Enter a name for the site:', required: false })
       }
       return null
-    }, 'none'), init)
+    }, 'none'))
 
     .command('configure', chalk.bold('Change the settings of a site.'), y =>
       y.example('configure --site teeny-angle-dwas5 --domain example.com')
@@ -93,7 +189,7 @@ module.exports = async function main () {
           boolean: true,
           describe: 'Add a custom domain to the site. Remove it by setting to blank or using `--no-domain`'
         })
-        .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))), configure)
+        .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))))
 
     .command('deploy [path]', chalk.bold('Create a new deployment for the site.\n\n') +
         chalk.dim('A deployment isn\'t automatically promoted to live by default. Use the ' +
@@ -105,7 +201,7 @@ module.exports = async function main () {
         .option('promote', { alias: 'p', describe: 'promote after deployment', type: 'boolean' })
         .option('wait', { alias: 'w', describe: 'wait for the invalidation to complete (if also promoting)', type: 'boolean' })
         .demandOption('path')
-        .implies('wait', 'promote'), deploy)
+        .implies('wait', 'promote'))
 
   // authenticate user or deploykey
   // siteId/deployId
@@ -128,7 +224,7 @@ module.exports = async function main () {
         }
     }, '$SC_DEPLOY_ID')
     .option('wait', { alias: 'w', describe: 'wait for the invalidation to complete', type: 'boolean' })
-    .demandOption('deployment'), )
+    .demandOption('deployment'))
 
   // authenticate user or deploykey
   // if interactive, show a list of deployments else if specified else -n count else -n -1
@@ -141,7 +237,7 @@ module.exports = async function main () {
     .demandCommand(1, 1, 'command required')
     .strictCommands()
 
-  const argv = await cli.parse()
+  const argv = await yargs.parse()
   console.log(argv)
 }
 
