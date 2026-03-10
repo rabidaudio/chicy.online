@@ -107,9 +107,9 @@ async function promote ({ siteId, deploymentId, wait }) {
   }
 }
 
-function main () {
+module.exports = function main () {
   let cli = yargs(hideBin(process.argv))
-    .scriptName('manage')
+    .scriptName('admin')
 
     .command('get_user [username]', 'check the status of a user', (yargs) => {
       return yargs.positional('username', { describe: 'the unique username of the user' })
@@ -187,5 +187,3 @@ function main () {
     .demandCommand(1, 1, 'command required')
     .parse()
 }
-
-main()
