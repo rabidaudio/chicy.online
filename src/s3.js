@@ -12,7 +12,7 @@ const client = new S3Client()
 
 const bucketName = process.env.BUCKET_NAME
 
-exports.upload = async (path, file, { contentType } = {}) => {
+module.exports.upload = async (path, file, { contentType } = {}) => {
   const params = {
     Bucket: bucketName,
     Key: path,
@@ -24,7 +24,7 @@ exports.upload = async (path, file, { contentType } = {}) => {
   await task.done()
 }
 
-exports.download = async (path) => {
+module.exports.download = async (path) => {
   logger.verbose(`s3: download s3://${bucketName}/${path}`)
   const res = await client.send(new GetObjectCommand({
     Bucket: bucketName,
@@ -33,7 +33,7 @@ exports.download = async (path) => {
   return await res.Body.transformToWebStream()
 }
 
-exports.deleteRecursive = async (path) => {
+module.exports.deleteRecursive = async (path) => {
   let Marker
   while (true) {
     logger.verbose(`s3: ls s3://${bucketName}/${path}`)

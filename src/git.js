@@ -37,7 +37,7 @@ const allFilesRelative = async (cwd, opts = {}) => {
 
 // create a stream of a .tar.gz of the directory at the provided path.
 // returns a node stream that can be piped to a file or request.
-exports.createTarball = async (directoryPath, { exclude } = { exclude: [] }) => {
+module.exports.createTarball = async (directoryPath, { exclude } = { exclude: [] }) => {
   logger.info(`creating tarball of ${directoryPath}`)
   const files = await allFilesRelative(directoryPath, { exclude })
   //   await Array.fromAsync(glob('**/*', { cwd: directoryPath, exclude }))
@@ -53,9 +53,8 @@ const extractTarball = async (tarball, cwd) => {
   await pipeline(tarball, extract) // wait for extraction to complete
 }
 
-
 // Create a new repository with the given deployment, and return the commit sha
-exports.initializeSite = async ({ siteId, deploymentId, tarball }) => {
+module.exports.initializeSite = async ({ siteId, deploymentId, tarball }) => {
   // create a new repository, unzip into it, commit the results,
   // create an s3 origin, and push the repo
   logger.info(`initializing repository ${siteId}`)
@@ -97,7 +96,7 @@ exports.initializeSite = async ({ siteId, deploymentId, tarball }) => {
   return commit
 }
 
-exports.addDeployment = async ({ siteId, deploymentId, tarball }) => {
+module.exports.addDeployment = async ({ siteId, deploymentId, tarball }) => {
   // clone the code from s3, delete all files, unzip,
   // commit the results, and push
   logger.info(`initializing repository ${siteId}`)
@@ -137,7 +136,7 @@ exports.addDeployment = async ({ siteId, deploymentId, tarball }) => {
   return commit
 }
 
-exports.promoteDeployment = async (siteId, deploymentId) => {
+module.exports.promoteDeployment = async (siteId, deploymentId) => {
   // clone, checkout the deployment, copy all files except .git to s3
   logger.info(`initializing repository ${siteId}`)
   const cwd = await createTmpDir()

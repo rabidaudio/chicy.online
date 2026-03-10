@@ -39,6 +39,12 @@ curl -X POST \
 # Rollback is as simple as promoting a previous deployment
 ```
 
+## Development
+
+```bash
+pipx install git-remote-s3
+```
+
 # TODO
 
 - breakup app

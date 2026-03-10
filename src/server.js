@@ -103,4 +103,4 @@ server.use((ctx) => {
   }
 })
 
-exports.server = server
+module.exports = { server }

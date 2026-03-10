@@ -36,7 +36,7 @@ const tenantParams = ({ siteId, baseDomain, customDomain }) => {
   return params
 }
 
-exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
+module.exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
   const params = {
     ...tenantParams({ siteId, baseDomain, customDomain }),
     Name: siteId
@@ -46,7 +46,7 @@ exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
   return DistributionTenant
 }
 
-exports.updateTenant = async ({ tenantId, siteId, baseDomain, customDomain }) => {
+module.exports.updateTenant = async ({ tenantId, siteId, baseDomain, customDomain }) => {
   const params = {
     ...tenantParams({ siteId, baseDomain, customDomain }),
     Id: tenantId
@@ -56,18 +56,18 @@ exports.updateTenant = async ({ tenantId, siteId, baseDomain, customDomain }) =>
   return DistributionTenant
 }
 
-exports.getTenant = async (tenantId) => {
+module.exports.getTenant = async (tenantId) => {
   logger.http(`cloudfront: get tenant ${tenantId}`)
   const { DistributionTenant } = await client.send(new GetDistributionTenantCommand({ Identifier: tenantId }))
   return DistributionTenant
 }
 
-exports.deleteTenant = async (tenantId) => {
+module.exports.deleteTenant = async (tenantId) => {
   logger.http(`cloudfront: delete tenant ${tenantId}`)
   await client.send(new DeleteDistributionTenantCommand({ Id: tenantId }))
 }
 
-exports.invalidate = async (distributionTenantId) => {
+module.exports.invalidate = async (distributionTenantId) => {
   const params = {
     Id: distributionTenantId,
     InvalidationBatch: {
@@ -83,7 +83,7 @@ exports.invalidate = async (distributionTenantId) => {
   return Invalidation
 }
 
-exports.getInvalidation = async (distributionTenantId, invalidationId) => {
+module.exports.getInvalidation = async (distributionTenantId, invalidationId) => {
   logger.http(`cloudfront: get invalidation ${distributionTenantId} ${invalidationId}`)
   const { Invalidation } = await client.send(new GetInvalidationForDistributionTenantCommand({
     DistributionTenantId: distributionTenantId,

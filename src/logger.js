@@ -9,7 +9,7 @@ const errorFormatter = winston.format((info, _opts) => {
   return info
 })
 
-exports.configure = ({ level, pretty } = {}) => {
+module.exports.configure = ({ level, pretty } = {}) => {
   const formats = [
     errorFormatter(),
     winston.format.simple()
@@ -38,7 +38,7 @@ exports.configure = ({ level, pretty } = {}) => {
   })
 }
 
-exports.getLogger = () => {
+module.exports.getLogger = () => {
   if (!_logger) throw new Error('must `configure` the logger before use')
   return _logger
 }

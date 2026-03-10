@@ -16,7 +16,7 @@ const docClient = DynamoDBDocumentClient.from(client)
 
 const tablePrefix = process.env.TABLE_PREFIX
 
-exports.put = async (table, data) => {
+module.exports.put = async (table, data) => {
   const command = new PutCommand({
     TableName: `${tablePrefix}-${table}`,
     Item: data
@@ -26,7 +26,7 @@ exports.put = async (table, data) => {
   return data
 }
 
-exports.show = async (table, key) => {
+module.exports.show = async (table, key) => {
   const command = new GetCommand({
     TableName: `${tablePrefix}-${table}`,
     Key: key // e.g. { userId }
@@ -47,7 +47,7 @@ exports.show = async (table, key) => {
 // Return an efficient page of results by filtering to partitionKey and ordering
 // by sortKey descending.
 // TODO: support pagination
-exports.query = async (table, partition, { asc, idx } = {}) => {
+module.exports.query = async (table, partition, { asc, idx } = {}) => {
   const [partitionKey, partitionValue] = Object.entries(partition)[0]
   const params = {
     TableName: `${tablePrefix}-${table}`,
@@ -67,7 +67,7 @@ exports.query = async (table, partition, { asc, idx } = {}) => {
 
 // returns an async generator which will page through the whole table.
 // To get a full array, use `await Array.fromAsync(scan(...))`
-exports.scan = async function * (table, filters = {}) {
+module.exports.scan = async function * (table, filters = {}) {
   let startKey
   const filterExpressions = []
   const params = {
@@ -97,7 +97,7 @@ exports.scan = async function * (table, filters = {}) {
   }
 }
 
-exports.delete = async (table, keys) => {
+module.exports.delete = async (table, keys) => {
   try {
     logger.http(`dynamo: delete ${table}`, keys)
     await docClient.send(new DeleteCommand({

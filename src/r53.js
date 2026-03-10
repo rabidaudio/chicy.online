@@ -7,7 +7,7 @@ const logger = require('./logger').getLogger()
 
 const client = new Route53Client()
 
-exports.getSiteDomain = (siteId) => `${siteId}.${process.env.SITES_DOMAIN}`
+module.exports.getSiteDomain = (siteId) => `${siteId}.${process.env.SITES_DOMAIN}`
 
 const getSiteRecordSet = (siteId) => ({
   Name: this.getSiteDomain(siteId),
@@ -36,6 +36,6 @@ const changeResource = async (operation, siteId) => {
   return { Id, Status }
 }
 
-exports.createSubdomain = async (siteId) => changeResource('UPSERT', siteId)
+module.exports.createSubdomain = async (siteId) => changeResource('UPSERT', siteId)
 
-exports.deleteSubdomain = async (siteId) => changeResource('DELETE', siteId)
+module.exports.deleteSubdomain = async (siteId) => changeResource('DELETE', siteId)

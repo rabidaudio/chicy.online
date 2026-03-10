@@ -11,7 +11,7 @@ const git = require('./git')
 const r53 = require('./r53')
 const s3 = require('./s3')
 
-exports.createTarball = git.createTarball
+module.exports.createTarball = git.createTarball
 
 const delay = async (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -23,7 +23,7 @@ class DomainValidationFailedError extends Error {
     if (options.results) this.results = options.results
   }
 }
-exports.DomainValidationFailedError = DomainValidationFailedError
+module.exports.DomainValidationFailedError = DomainValidationFailedError
 
 // generate a unique human-friendly id for each site to be used
 // as a subdomain.
@@ -48,7 +48,7 @@ const generateDeployId = () => {
   return Buffer.concat([timestamp, rand]).toString('hex')
 }
 
-exports.createUser = async ({ userId, name }) => {
+module.exports.createUser = async ({ userId, name }) => {
   return await db.put('users', {
     userId,
     name,
@@ -56,11 +56,11 @@ exports.createUser = async ({ userId, name }) => {
   })
 }
 
-exports.getUser = async (userId) => {
+module.exports.getUser = async (userId) => {
   return await db.show('users', { userId })
 }
 
-exports.listSitesForUser = async (userId) => {
+module.exports.listSitesForUser = async (userId) => {
   const sites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false })
   return sites.map(site => ({ ...site, deployKey: '<obfuscated>' }))
 }
@@ -69,7 +69,7 @@ exports.listSitesForUser = async (userId) => {
 // a randomly generated subdomain like `estate-specify-07euk`,
 // a deploy key used to authenticate deployments, a name,
 // a userId which owns it.
-exports.createSite = async ({ name, userId, customDomain }) => {
+module.exports.createSite = async ({ name, userId, customDomain }) => {
   const siteId = generateSiteId()
   logger.info(`generating ${siteId}`)
 
@@ -88,19 +88,19 @@ exports.createSite = async ({ name, userId, customDomain }) => {
   })
 }
 
-// exports.waitForDistribution = async (tenantId) => {
+// module.exports.waitForDistribution = async (tenantId) => {
 //   const tenant = await cfront.getTenant(tenantId)
 //   // tenant.Status // TODO: what values??
 // }
 
-exports.getSite = async (siteId) => {
+module.exports.getSite = async (siteId) => {
   const site = await db.show('sites', { siteId })
   return { ...site, deployKey: '<obfuscated>' }
 }
 
 // Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
 // if not, return silently if verified
-exports.verifyCustomDomain = async (siteId, customDomain) => {
+module.exports.verifyCustomDomain = async (siteId, customDomain) => {
   const target = r53.getSiteDomain(siteId)
   try {
     const results = await dns.resolveCname(customDomain)
@@ -122,7 +122,7 @@ exports.verifyCustomDomain = async (siteId, customDomain) => {
 }
 
 // add/remove custom domain
-exports.setSiteCustomDomain = async (siteId, customDomain) => {
+module.exports.setSiteCustomDomain = async (siteId, customDomain) => {
   if (customDomain) await this.verifyCustomDomain(siteId, customDomain)
 
   const site = await db.show('sites', { siteId })
@@ -145,7 +145,7 @@ exports.setSiteCustomDomain = async (siteId, customDomain) => {
 // newer deployments are alphabetically after older ones.
 // NOTE: this does not update the content on the site.
 // For that, call promoteDeployment.
-exports.createDeployment = async ({ siteId, contentTarball }) => {
+module.exports.createDeployment = async ({ siteId, contentTarball }) => {
   const site = await db.get('sites', { siteId })
   const deploymentId = generateDeployId()
 
@@ -163,11 +163,11 @@ exports.createDeployment = async ({ siteId, contentTarball }) => {
   return deployment
 }
 
-exports.listDeployments = async (siteId) => {
+module.exports.listDeployments = async (siteId) => {
   return await db.query('deployments', { siteId }, { asc: false })
 }
 
-exports.getDeployment = async ({ siteId, deploymentId }) => {
+module.exports.getDeployment = async ({ siteId, deploymentId }) => {
   return await db.get('deployments', { siteId, deploymentId })
 }
 
@@ -179,7 +179,7 @@ const createDistribution = async ({ siteId, customDomain }) => {
 }
 
 // make the deployment live for the site
-exports.promoteDeployment = async ({ siteId, deploymentId }) => {
+module.exports.promoteDeployment = async ({ siteId, deploymentId }) => {
   const site = await db.show('sites', { siteId })
   const deployment = await db.show('deployments', { siteId, deploymentId })
 
@@ -209,7 +209,7 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
   })
 }
 
-exports.deleteSite = async (siteId) => {
+module.exports.deleteSite = async (siteId) => {
   logger.warn(`deleting site ${siteId}`)
   const site = await db.get('sites', { siteId })
   const deleteDeploymentsForSite = async (siteId) => {
@@ -237,7 +237,7 @@ exports.deleteSite = async (siteId) => {
   logger.info(`site deleted: ${siteId}`)
 }
 
-exports.awaitInvalidationComplete = async ({ siteId, deploymentId }) => {
+module.exports.awaitInvalidationComplete = async ({ siteId, deploymentId }) => {
   const site = await db.show('sites', { siteId })
   const deployment = await db.show('deployments', { siteId, deploymentId })
   if (!deployment.invalidationId) {
@@ -254,7 +254,7 @@ exports.awaitInvalidationComplete = async ({ siteId, deploymentId }) => {
   }
 }
 
-exports.wipeEverything = async () => {
+module.exports.wipeEverything = async () => {
   if (process.env.NODE_ENV !== 'dev') throw new Error('Can only destroy dev environments')
 
   logger.warn('deleting everything!')
