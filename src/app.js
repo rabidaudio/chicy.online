@@ -11,12 +11,23 @@ const namor = require('namor')
 const tar = require('tar')
 
 const logger = require('./logger').getLogger()
+
 const cfront = require('./cfront')
-const cform = require('./cform')
 const db = require('./db')
+const r53 = require('./r53')
 const s3 = require('./s3')
 
 const delay = async (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+class DomainValidationFailedError extends Error {
+  constructor (message, options) {
+    super(message, options)
+    this.code = options.code
+    this.target = options.target
+    if (options.results) this.results = options.results
+  }
+}
+exports.DomainValidationFailedError = DomainValidationFailedError
 
 // where deployments are stored on S3
 const siteDeploymentsKeyPrefix = (siteId) => `deployments/${siteId}`
@@ -49,6 +60,17 @@ const generateDeployId = () => {
   return Buffer.concat([timestamp, rand]).toString('hex')
 }
 
+// create a stream of a .tar.gz of the directory at the provided path.
+// returns a node stream that can be piped to a file or request.
+exports.createTarball = async (directoryPath, exclude = []) => {
+  logger.info(`creating tarball of ${directoryPath}`)
+  const files = await Array.fromAsync(glob('**/*', { cwd: directoryPath, exclude }))
+  for (const item of files) {
+    logger.info(item)
+  }
+  return ReadableStream.from(tar.create({ cwd: directoryPath, gzip: true }, files))
+}
+
 exports.createUser = async ({ userId, name }) => {
   return await db.put('users', {
     userId,
@@ -61,6 +83,11 @@ exports.getUser = async (userId) => {
   return await db.show('users', { userId })
 }
 
+exports.listSitesForUser = async (userId) => {
+  const sites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false })
+  return sites.map(site => ({ ...site, deployKey: '<obfuscated>' }))
+}
+
 // create a site. A site has a siteId which is
 // a randomly generated subdomain like `estate-specify-07euk`,
 // a deploy key used to authenticate deployments, a name,
@@ -69,35 +96,24 @@ exports.createSite = async ({ name, userId, customDomain }) => {
   const siteId = generateSiteId()
   logger.info(`generating ${siteId}`)
 
-  const { stackId, operationId } = await cform.createSite({ siteId })
+  if (customDomain) {
+    await this.verifyCustomDomain(siteId, customDomain)
+  }
 
-  // TODO: should we create on first deploy instead??
+  await r53.createSubdomain(siteId)
   return await db.put('sites', {
     siteId,
     userId,
     name,
-    stackId,
-    latestOperationId: operationId,
+    customDomain,
     deployKey: generateDeployKey(),
     createdAt: new Date().toISOString()
   })
 }
 
-// exports.waitForStack = async (site, callback = () => {}) => {
-//   if (!site.latestOperationId) return
-
-//   while (true) {
-//     const operation = await cform.getStackStatus(site.siteId, site.latestOperationId)
-//     callback(operation.Status)
-
-//     switch (operation.Status) {
-//       case 'SUCCEEDED': return operation
-//       case 'FAILED': throw new Error("Stack failed") // TODO: get error info
-//       case 'STOPPED': throw new Error("Stack was stopped")
-//       // QUEUED, RUNNING, STOPPING
-//     }
-//     await delay(5000)
-//   }
+// exports.waitForDistribution = async (tenantId) => {
+//   const tenant = await cfront.getTenant(tenantId)
+//   // tenant.Status // TODO: what values??
 // }
 
 exports.getSite = async (siteId) => {
@@ -105,28 +121,17 @@ exports.getSite = async (siteId) => {
   return { ...site, deployKey: '<obfuscated>' }
 }
 
-class DomainValidationFailedError extends Error {
-  constructor (message, options) {
-    super(message, options)
-    this.code = options.code
-    this.target = options.target
-    if (options.results) this.results = options.results
-  }
-}
-exports.DomainValidationFailedError = DomainValidationFailedError
-
 // Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
 // if not, return silently if verified
 exports.verifyCustomDomain = async (siteId, customDomain) => {
-  // TODO: does it have to be the cloudfront domain?
-  // if we set it to cloudfront instead, it could be set at create time...
-  const target = `${siteId}.${process.env.SITES_DOMAIN}`
+  const target = r53.getSiteDomain(siteId)
   try {
     const results = await dns.resolveCname(customDomain)
     if (results.length === 0) {
       throw new DomainValidationFailedError('record has no value', { code: 'INVALID', target })
     }
     if (results[0] === target) return // ok
+    if (results[0] === process.env.DISTRIBUTION_DOMAIN) return // ok also
     throw new DomainValidationFailedError('record has incorrect value', { code: 'INVALID', target, results })
   } catch (err) {
     if (err.code === 'ENOTFOUND') {
@@ -139,33 +144,22 @@ exports.verifyCustomDomain = async (siteId, customDomain) => {
   }
 }
 
+// add/remove custom domain
 exports.setSiteCustomDomain = async (siteId, customDomain) => {
-  await this.verifyCustomDomain(siteId, customDomain)
+  if (customDomain) await this.verifyCustomDomain(siteId, customDomain)
 
   const site = await db.show('sites', { siteId })
-  // TODO: if stack update in progress, error
-  const { operationId } = await cform.updateParams(site.stackId, { siteId, customDomain })
 
-  const updatedSite = await db.put('sites', {
-    ...site,
-    customDomain,
-    latestOperationId: operationId
-  })
+  // if distro exists, update it
+  if (site.tenantId) {
+    logger.info(`updating tenant ${siteId}: domain=${customDomain || 'default'}`)
+    const baseDomain = r53.getSiteDomain(siteId)
+    await cfront.updateTenant({ tenantId: site.tenantId, siteId, baseDomain, customDomain })
+  }
+  // otherwise will set on first deploy
 
+  const updatedSite = await db.put('sites', { ...site, customDomain })
   return { ...updatedSite, deployKey: '<obfuscated>' }
-}
-
-exports.listSitesForUser = async (userId) => {
-  const sites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false })
-  return sites.map(site => ({ ...site, deployKey: '<obfuscated>' }))
-}
-
-exports.listDeployments = async (siteId) => {
-  return await db.query('deployments', { siteId }, { asc: false })
-}
-
-exports.getDeployment = async ({ siteId, deploymentId }) => {
-  return await db.get('deployments', { siteId, deploymentId })
 }
 
 // create a new deployment for a site.
@@ -186,10 +180,35 @@ exports.createDeployment = async ({ siteId, contentTarball }) => {
   return deployment
 }
 
+exports.listDeployments = async (siteId) => {
+  return await db.query('deployments', { siteId }, { asc: false })
+}
+
+exports.getDeployment = async ({ siteId, deploymentId }) => {
+  return await db.get('deployments', { siteId, deploymentId })
+}
+
+const createDistribution = async ({ siteId, customDomain }) => {
+  const baseDomain = r53.getSiteDomain(siteId)
+  const tenant = await cfront.createTenant({ siteId, customDomain, baseDomain })
+  logger.verbose('tenant distro created', tenant)
+  return tenant.Id
+}
+
 // make the deployment live for the site
 exports.promoteDeployment = async ({ siteId, deploymentId }) => {
   const site = await db.show('sites', { siteId })
   const deployment = await db.show('deployments', { siteId, deploymentId })
+
+  if (!site.distributionId) {
+    logger.warn(
+      'This is the first deployment published to the site, so it will take longer ' +
+      'than usual to go live. Future deployments should be much quicker.'
+    )
+    logger.info('creating distro tenant')
+    site.tenantId = await createDistribution(site)
+    await db.put('sites', site)
+  }
 
   const siteContentPath = siteContentKeyPrefix(siteId)
   logger.info(`promoting ${siteId}/${deploymentId}`)
@@ -221,13 +240,9 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
     }
   }
 
-  if (!site.distributionTenantId) {
-    const { stackId, operationId } = await cform.createSite({ siteId })
-    site.stackId = stackId
-    site.latestOperationId = operationId
-  } else if (site.currentDeployment) {
+  if (site.currentDeployment) {
     logger.info('invalidating cache')
-    const invalidation = await cfront.invalidate(site.distributionTenantId)
+    const invalidation = await cfront.invalidate(site.tenantId)
     db.put('deployments', { ...deployment, invalidationId: invalidation.Id })
   }
 
@@ -241,6 +256,7 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
 
 exports.deleteSite = async (siteId) => {
   logger.warn(`deleting site ${siteId}`)
+  const site = await db.get('sites', { siteId })
   const deleteDeploymentsForSite = async (siteId) => {
     for (const { deploymentId } in await db.query('deployments', { siteId })) {
       logger.info(`deleting ${siteId}/${deploymentId}`)
@@ -248,8 +264,13 @@ exports.deleteSite = async (siteId) => {
     }
   }
   await Promise.all([
-    // remove domain + distro
-    cform.deleteStack(siteId).then(() => logger.info(`[${siteId}] deleted CloudFormation stack`)),
+    // delete resources
+    (site.tenantId
+      ? cfront.deleteTenant(site.tenantId).then(logger.info(`[${siteId}] deleted distribution tenant`))
+      : Promise.resolve()
+    ).then(() => r53.deleteSubdomain(siteId))
+      .then(logger.info(`[${siteId}] deleted subdomain route`)),
+
     // delete data from S3
     s3.deleteRecursive(siteContentKeyPrefix(siteId)).then(() => logger.info(`[${siteId}] deleted site content`)),
     s3.deleteRecursive(siteDeploymentsKeyPrefix(siteId)).then(() => logger.info(`[${siteId}] deleted deployment data`)),
@@ -271,23 +292,11 @@ exports.awaitInvalidationComplete = async ({ siteId, deploymentId }) => {
 
   logger.info(`waiting for invalidation ${siteId}/${deploymentId}`)
   while (true) {
-    const invalidation = await cfront.getInvalidation(site.distributionTenantId, deployment.invalidationId)
+    const invalidation = await cfront.getInvalidation(site.tenantId, deployment.invalidationId)
     logger.info(`invalidation status: ${invalidation.Status}`)
     if (invalidation.Status === 'Completed') return invalidation
     await delay(5000)
   }
-}
-
-// create a stream of a .tar.gz of the directory at the provided path.
-// returns a node stream that can be piped to a file or request.
-exports.createTarball = async (directoryPath, exclude = []) => {
-  logger.info(`creating tarball of ${directoryPath}`)
-  const filesInDirectory = await Array.fromAsync(glob('**/*', { cwd: directoryPath, exclude }))
-  // const relativeFiles = filesInDirectory.map((item) => path.relative(directoryPath, item))
-  for (const item of filesInDirectory) {
-    logger.info(item)
-  }
-  return ReadableStream.from(tar.create({ cwd: directoryPath, gzip: true }, filesInDirectory))
 }
 
 exports.wipeEverything = async () => {

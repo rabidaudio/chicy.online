@@ -1,12 +1,71 @@
 const {
   CloudFrontClient,
   CreateInvalidationForDistributionTenantCommand,
-  GetInvalidationForDistributionTenantCommand
+  GetInvalidationForDistributionTenantCommand,
+  CreateDistributionTenantCommand,
+  UpdateDistributionTenantCommand,
+  DeleteDistributionTenantCommand,
+  GetDistributionTenantCommand
 } = require('@aws-sdk/client-cloudfront')
 
 const logger = require('./logger').getLogger()
 
 const client = new CloudFrontClient()
+
+const tenantParams = ({ siteId, baseDomain, customDomain }) => {
+  const params = {
+    Enabled: true,
+    DistributionId: process.env.DISTRIBUTION_ID,
+    Domains: [baseDomain],
+    ConnectionGroupId: process.env.CONNECTION_GROUP_ID,
+    Tags: [
+      { Name: 'app', Value: process.env.APP_NAME },
+      { Name: 'stage', Value: process.env.STAGE }
+    ],
+    Parameters: [
+      { Name: 'siteId', Value: siteId }
+    ]
+  }
+  if (customDomain) {
+    params.Domains.push(customDomain)
+    params.ManagedCertificateRequest = {
+      PrimaryDomainName: customDomain,
+      ValidationTokenHost: 'cloudfront'
+    }
+  }
+  return params
+}
+
+exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
+  const params = {
+    ...tenantParams({ siteId, baseDomain, customDomain }),
+    Name: siteId
+  }
+  logger.http(`cloudfront: create tenant ${siteId}`, params)
+  const { DistributionTenant } = await client.send(new CreateDistributionTenantCommand(params))
+  return DistributionTenant
+}
+
+exports.updateTenant = async ({ tenantId, siteId, baseDomain, customDomain }) => {
+  const params = {
+    ...tenantParams({ siteId, baseDomain, customDomain }),
+    Id: tenantId
+  }
+  logger.http(`cloudfront: update tenant ${siteId}`, params)
+  const { DistributionTenant } = await client.send(new UpdateDistributionTenantCommand(params))
+  return DistributionTenant
+}
+
+exports.getTenant = async (tenantId) => {
+  logger.http(`cloudfront: get tenant ${tenantId}`)
+  const { DistributionTenant } = await client.send(new GetDistributionTenantCommand({ Identifier: tenantId }))
+  return DistributionTenant
+}
+
+exports.deleteTenant = async (tenantId) => {
+  logger.http(`cloudfront: delete tenant ${tenantId}`)
+  await client.send(new DeleteDistributionTenantCommand({ Id: tenantId }))
+}
 
 exports.invalidate = async (distributionTenantId) => {
   const params = {

@@ -41,13 +41,12 @@ curl -X POST \
 
 # TODO
 
-- exclude on zip
 - store with git-remote-s3
+- breakup app
 - deploy keys
 - production deploy
 - Github authentication
 - deploy CLI
-- swap CF with manual creates
 - frontend
 - add Tags to everything for cost tracking
 - flag for private-only in sls to disable github logins

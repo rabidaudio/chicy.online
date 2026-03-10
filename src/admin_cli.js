@@ -45,7 +45,7 @@ async function addSite ({ owner, name, wait }) {
   }
 }
 
-async function addCustomDomain ({ site, domain, wait }) {
+async function addCustomDomain ({ site, domain }) {
   try {
     const updatedSite = await app.setSiteCustomDomain(site, domain)
     console.log(updatedSite)
@@ -67,10 +67,6 @@ async function addCustomDomain ({ site, domain, wait }) {
       console.log('If you have already created the record, it may take a few minutes to take effect.')
     }
   }
-  // if (wait) {
-  //   console.log("waiting...")
-  //   await app.waitForStack(updatedSite, (status) => console.log(status))
-  // }
 }
 
 async function listDeployments ({ site }) {
@@ -115,11 +111,11 @@ function main () {
   let cli = yargs(hideBin(process.argv))
     .scriptName('manage')
 
-    .command('get_user <username>', 'check the status of a user', (yargs) => {
+    .command('get_user [username]', 'check the status of a user', (yargs) => {
       return yargs.positional('username', { describe: 'the unique username of the user' })
     }, wrap(getUser))
 
-    .command('add_user <username> [details]', 'create a new user', (yargs) => {
+    .command('add_user [username]', 'create a new user', (yargs) => {
       return yargs
         .positional('username', { describe: 'the unique username of the user' })
         .option('name', {
@@ -129,46 +125,30 @@ function main () {
         .demandOption(['n'])
     }, wrap(addUser))
 
-    .command('list_sites <username>', 'show all the sites managed by the user', (yargs) => {
+    .command('list_sites [username]', 'show all the sites managed by the user', (yargs) => {
       return yargs
         .positional('username', { describe: 'the username of the user' })
     }, wrap(listSites))
 
     .command('add_site', 'create a new site', (yargs) => {
       return yargs
-        .example('add_site -o [username] -n [name]')
-        .option('owner', {
-          alias: 'o',
-          describe: 'The username of the site owner'
-        })
+        .example('add_site [username] -n [name]')
+        .positional('owner', { describe: 'The username of the site owner' })
         .option('name', {
           alias: 'n',
-          describe: 'The name of the site'
+          describe: 'The display name of the site'
         })
-        // TODO: custom domain
-        .option('wait', {
-          alias: 'w',
-          describe: 'wait for the CloudFront distribution to activate'
-        })
-        .demandOption(['owner', 'name'])
+        .demandOption(['owner'])
     }, wrap(addSite))
 
-    .command('add_custom_domain', 'add a custom domain to a site', (yargs) => {
+    .command('add_domain [site] [domain]', 'add a custom domain to a site', (yargs) => {
       return yargs
-        .example('add_custom_domain -s [siteId] -d example.com')
-        .option('site', {
-          alias: 's',
-          describe: 'the siteId'
-        })
-        .option('domain', {
-          alias: 'd',
-          describe: 'the custom domain'
-        })
-        .option('wait', {
-          alias: 'w',
-          describe: 'wait for the CloudFront distribution to activate'
-        })
-        .demandOption(['site', 'domain'])
+        .positional('site', { describe: 'the siteId' })
+        .positional('domain', { describe: 'the custom domain. Must have a CNAME DNS record to the default domain' })
+    }, wrap(addCustomDomain))
+    .command('remove_domain [site]', 'remove a custom domain from a site', (yargs) => {
+      return yargs
+        .positional('site', { describe: 'the siteId' })
     }, wrap(addCustomDomain))
 
     .command('list_deployments [site]', 'list all the deployments for a site', (yargs) => {
