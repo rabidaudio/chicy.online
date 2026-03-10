@@ -16,7 +16,7 @@ const tenantParams = ({ siteId, baseDomain, customDomain }) => {
   const params = {
     Enabled: true,
     DistributionId: process.env.DISTRIBUTION_ID,
-    Domains: [baseDomain],
+    Domains: [{ Domain: baseDomain }],
     ConnectionGroupId: process.env.CONNECTION_GROUP_ID,
     Tags: [
       { Name: 'app', Value: process.env.APP_NAME },
@@ -27,7 +27,7 @@ const tenantParams = ({ siteId, baseDomain, customDomain }) => {
     ]
   }
   if (customDomain) {
-    params.Domains.push(customDomain)
+    params.Domains.push({ Domain: customDomain })
     params.ManagedCertificateRequest = {
       PrimaryDomainName: customDomain,
       ValidationTokenHost: 'cloudfront'

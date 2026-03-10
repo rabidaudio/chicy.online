@@ -52,3 +52,4 @@ curl -X POST \
 - flag for private-only in sls to disable github logins
 - json vs text outputs from cli
 - complete integration tests
+- 404 returns 403 Permission Denied instead

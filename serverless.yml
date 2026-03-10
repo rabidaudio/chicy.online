@@ -68,6 +68,21 @@ provider:
               - ''
               - - Fn::GetAtt: [DeploymentBucket, Arn]
                 - '/*'
+        - Effect: Allow
+          Action:
+            # These have no resource
+            - cloudfront:ListDistributionTenants
+            - cloudfront:CreateDistributionTenant
+            # These have a resource of the tenant ARN which we can't set dynamically
+            - cloudfront:GetDistributionTenant
+            - cloudfront:ListInvalidationsForDistributionTenant
+            - cloudfront:GetDistributionTenantByDomain
+            - cloudfront:DeleteDistributionTenant
+            - cloudfront:CreateInvalidationForDistributionTenant
+            - cloudfront:GetInvalidationForDistributionTenant
+            - cloudfront:UpdateDistributionTenant
+          Resource: "*"
+
   environment:
     NODE_ENV: ${sls:stage}
     HOSTNAME: ${param:apiDomain}

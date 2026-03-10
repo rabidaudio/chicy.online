@@ -200,7 +200,7 @@ exports.promoteDeployment = async ({ siteId, deploymentId }) => {
   const site = await db.show('sites', { siteId })
   const deployment = await db.show('deployments', { siteId, deploymentId })
 
-  if (!site.distributionId) {
+  if (!site.tenantId) {
     logger.warn(
       'This is the first deployment published to the site, so it will take longer ' +
       'than usual to go live. Future deployments should be much quicker.'

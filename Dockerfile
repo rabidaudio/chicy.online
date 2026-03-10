@@ -25,7 +25,7 @@ COPY package-lock.json package-lock.json
 RUN npm install -g npm@11.11.0 && \
     npm install --omit dev
 
-COPY src/ src/
+COPY src/ ${LAMBDA_TASK_ROOT}/src/
 
 COPY handler.js ${LAMBDA_TASK_ROOT}
 CMD [ "handler.handler" ]

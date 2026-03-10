@@ -37,7 +37,7 @@
     "lint": "standard --fix",
     "publish": "serverless deploy",
     "admin": "bin/admin",
-    "test": "dotenvx run -- mocha"
+    "test": "mocha"
   },
   "mocha": {
     "timeout": 15000,
