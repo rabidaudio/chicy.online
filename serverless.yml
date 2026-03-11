@@ -183,7 +183,7 @@ resources:
     # S3 Bucket 
     DeploymentBucket:
       Type: AWS::S3::Bucket
-      DeletionPolicy: Retain
+      DeletionPolicy: Delete
       Properties:
         BucketName: ${param:bucketName}
     # A policy that allows AccessIdentity to read the contents of DeploymentBucket
