@@ -4,7 +4,7 @@ const namor = require('namor')
 
 const logger = require('./logger').getLogger()
 
-const { generateDeployKey, obfuscateDeployKey } = require('./auth')
+const { generateDeployKey, obfuscateDeployKey } = require('./auth/deploy_keys')
 const cfront = require('./cfront')
 const db = require('./db')
 const git = require('./files')
@@ -170,7 +170,7 @@ const sanitize = (site, { showDeployKey } = {}) => {
   const {
     siteId, name, customDomain, userId,
     currentDeployment, deployedAt, createdAt, status,
-    deployKey, deployCreatedAt, deployKeyLastUsedAt
+    deployKey, deployKeyCreatedAt, deployKeyLastUsedAt
     // excluding:
     // etag, gitInitialized, tenantId
   } = site
@@ -183,7 +183,7 @@ const sanitize = (site, { showDeployKey } = {}) => {
     deployedAt,
     createdAt,
     status,
-    deployCreatedAt,
+    deployKeyCreatedAt,
     deployKeyLastUsedAt,
     deployKey: (showDeployKey ? deployKey : obfuscateDeployKey(deployKey))
   }

@@ -9,8 +9,8 @@ const db = require('../db')
 const DeployKeys = {
   // generate a secure random key to grant access to deployments
   generateDeployKey: () => ({
-    deployKey: `dk_${randomBytes(32).toString('base64')}`,
-    deployCreatedAt: new Date().toISOString(),
+    deployKey: `dk_${randomBytes(32).toString('base64url')}`,
+    deployKeyCreatedAt: new Date().toISOString(),
     deployKeyLastUsedAt: null
   }),
 

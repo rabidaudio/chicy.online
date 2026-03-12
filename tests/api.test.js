@@ -1,97 +1,17 @@
-require('@dotenvx/dotenvx').config()
-
+/* eslint-disable no-unused-expressions */
 const path = require('node:path')
+const { buffer } = require('node:stream/consumers')
 
 const { expect } = require('chai')
 const chalk = require('chalk')
 const prompts = require('@inquirer/prompts')
-const fetchVCR = require('fetch-vcr')
 
-require('../src/logger').configure({
-  level: process.env.LOG_LEVEL || 'error', pretty: true
-})
-
+const { runTests, Api } = require('./utils')
 const { createTarball } = require('../src/files')
 
-const runTests = (...tests) => {
-  const ctx = {}
-  const chain = async (tests) => {
-    const [test, ...rem] = tests
-    if (!test) return
-    return test(ctx)
-      .then(() => console.log(chalk.green(test.name)))
-      .catch(err => {
-        console.log(ctx)
-        console.error(chalk.red(test.name))
-        console.error(err)
-        throw err
-      })
-      .then(chain(rem))
-  }
-
-  chain(tests)
-}
-
-
-
-// NOTE: these tests are integration tests run against a development deploy
-// (sls:stage=dev) of the actual app
-class Api {
-   // 'playback' | 'cache' | 'record' | 'erase'
-  constructor(mode = process.env.VCR_MODE || 'cache') {
-    this.host = process.env.TEST_HOST || 'https://dev.static-chic.online'
-    this.mode = mode
-    this.headers = {}
-    this.index = 0
-    this.fetchVCR = fetchVCR
-    this.fetchVCR.configure({
-      fixturePath: path.join(__dirname, '_fixtures'),
-      mode
-    })
-  }
-
-  async fetch(path, method, opts = {}) {
-    const url = new URL(this.host + path)
-    // add a dummy query parameter to make subsequent reqs unique
-    url.searchParams.append('_ridx', this.index)
-    const res = await this.fetchVCR(url.toString(), { method, headers: this.headers, ...opts })
-    this.index += 1
-    if (res.headers.get('content-type').match(/^application\/json/)) {
-      const json = await res.json()
-      res.json = json
-    }
-    return res
-  }
-
-  set(header, value) {
-    this.headers[header] = value
-    return this
-  }
-
-  clear(header) {
-    this.headers[header] = undefined
-    return this
-  }
-  
-  async GET(path, opts = {}) {
-    return await this.fetch(path, 'GET', opts)
-  }
-
-  async POST(path, opts = {}) {
-    return await this.fetch(path, 'POST', opts)
-  }
-
-  async PUT(path, opts = {}) {
-    return await this.fetch(path, 'PUT', opts)
-  }
-  
-  async DELETE(path, opts = {}) {
-    return await this.fetch(path, 'DELETE', opts)
-  }
-}
 const api = new Api()
 
-async function testRunning(ctx) {
+async function testRunning (ctx) {
   const res = await api.GET('/')
   expect(res.status).to.equal(200)
   expect(res.json.status).to.equal('OK')
@@ -99,8 +19,8 @@ async function testRunning(ctx) {
   expect(res.json.data.distro).to.match(/.+\.cloudfront\.net/)
 }
 
-async function testAuth(ctx) {
-  let res = await api.POST(`/signup?provider=github`)
+async function testAuth (ctx) {
+  let res = await api.POST('/signup?provider=github')
   expect(res.status).to.equal(200)
   expect(res.json.status).to.equal('OK')
   expect(res.json.data.authReqId).to.exist
@@ -112,10 +32,10 @@ async function testAuth(ctx) {
   expect(res.json.status).to.equal('OK')
   expect(res.json.data.authReqId).to.equal(ctx.authReqId)
   expect(res.json.data.state).to.equal('pending')
-  
+
   if (!res.wasCached) {
-    console.log(chalk.bold("open ")+res.json.data.authorizationUrl)
-    await prompts.confirm({ message: "authorized?" })
+    console.log(chalk.bold('open ') + res.json.data.authorizationUrl)
+    await prompts.confirm({ message: 'authorized?' })
   }
 
   res = await api.GET(`/signup/${ctx.authReqId}`)
@@ -135,67 +55,177 @@ async function testAuth(ctx) {
 
 // TODO test failed auth paths
 
-runTests(testRunning, testAuth)
+async function testSite (ctx) {
+  api.set('Authorization', `Basic ${ctx.userToken}`)
 
-// const userId = 'test'
-// let siteId = 'teeny-angle-dwas5'
-// let deploymentId = ''
+  let res = await api.GET('/sites')
+  expect(res.status).to.equal(200)
+  expect(res.json.status).to.equal('OK')
+  expect(res.json.data).to.be.empty
 
-// describe('API', () => {
-//   before(async () => {
-//     await createUser({ userId, name: 'Test User' })
-//     if (siteId === '') {
-//       const site = await createSite({ userId, name: 'Test Site' })
-//       siteId = site.siteId
-//     }
-//   })
+  res = await api.POST('/sites', {
+    body: JSON.stringify({ name: 'Test Site' })
+  })
+  expect(res.status).to.equal(201)
+  expect(res.json.status).to.equal('OK')
+  expect(res.json.data.siteId).to.exist
+  ctx.siteId = res.json.data.siteId
+  // expect(res.json.data.name).to.equal('Test Site') // STOPSHIP
+  expect(res.json.data.userId).to.equal(ctx.userId)
+  expect(res.json.data.createdAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
+  expect(res.json.data.currentDeployment).not.to.exist
+  expect(res.json.data.deployedAt).not.to.exist
+  // expect(res.json.data.deployKey).to.match(/^dk_[A-Za-z0-9-_]+$/)
+  ctx.deployKey = res.json.data.deployKey
+  // expect(res.json.data.deployKeyCreatedAt).to.satisfy((d) => new Date(d).getTime() > 0, "be an iso timestamp") // STOPSHIP
+  expect(res.json.data.deployKeyLastUsedAt).not.to.exist
 
-//   describe('Deployments', () => {
-//     describe('create', () => {
-//       it('should create a new deployment', async () => {
-//         const testTarball = await createTarball(path.join(__dirname, '..', 'example-dist'))
-//         const data = await buffer(testTarball)
-//         const res = await fetch(`${api}/sites/${siteId}/deployments`, {
-//           method: 'POST',
-//           body: data,
-//           headers: {
-//             'Content-Type': 'application/gzip'
-//           }
-//         })
-//         expect(res.status).to.equal(200)
-//         const body = await res.json()
-//         expect(body.status).to.equal('OK')
-//         const deployment = body.data
-//         expect(deployment.siteId).to.equal(siteId)
-//         expect(deployment.deploymentId).not.to.equal(null)
-//       })
-//     })
+  res = await api.GET(`/sites/${ctx.siteId}`)
+  expect(res.status).to.equal(200)
+  expect(res.json.status).to.equal('OK')
+  expect(res.json.data.siteId).to.equal(ctx.siteId)
+  // expect(res.json.data.deployKey).to.match(/^dk_[A-Za-z0-9-_]{5}x+$/, "be obfuscated")
 
-//     describe('list', () => {
-//       it('should return a list of deployments', async () => {
-//         const res = await fetch(`${api}/sites/${siteId}/deployments`)
-//         expect(res.status).to.equal(200)
-//         const body = await res.json()
-//         expect(body.status).to.equal('OK')
-//         const deployments = body.data
-//         expect(deployments.length).to.equal(body.pagination.count)
-//         expect(deployments[0].deploymentId).to.match(/^[0-9a-f]{24}$/)
-//         expect(deployments[0].siteId).to.equal(siteId)
-//         deploymentId = deployments[0].deploymentId
-//       })
-//     })
+  res = await api.GET('/sites')
+  expect(res.status).to.equal(200)
+  expect(res.json.status).to.equal('OK')
+  expect(res.json.data).to.have.length(1)
+  expect(res.json.pagination.count).to.equal(1)
+  expect(res.json.data[0].siteId).to.equal(ctx.siteId)
+  // expect(res.json.data[0].deployKey).to.match(/^dk_[A-Za-z0-9-_]{5}x+$/, "be obfuscated")
+}
 
-//     describe('promote', () => {
-//       it('should make the deployment live for the site', async () => {
-//         const res = await fetch(`${api}/sites/${siteId}/deployments/${deploymentId}/promote`, {
-//           method: 'POST'
-//         })
-//         expect(res.status).to.equal(200)
-//         const body = await res.json()
-//         expect(body.status).to.equal('OK')
-//         expect(body.data.siteId).to.equal(siteId)
-//         expect(body.data.currentDeployment).to.equal(deploymentId)
-//       })
-//     })
-//   })
-// })
+// TODO: custom domain: before and after deploy, with and without domain
+
+async function testDeploy (ctx) {
+  let res
+  for (const auth of [`Basic ${ctx.userToken}`, `Bearer ${ctx.deployKey}`]) {
+    api.set('Authorization', auth)
+
+    // create dep 1
+    const tarball1 = await createTarball(path.join(__dirname, '..', 'example-dist'), { exclude: ['images'] })
+    res = await api.POST(`/sites/${ctx.siteId}/deployments`, {
+      body: (await buffer(tarball1)),
+      headers: {
+        'Content-Type': 'application/gzip'
+      }
+    })
+    expect(res.status).to.equal(201)
+    expect(res.json.status).to.equal('OK')
+    // expect(res.json.data.deploymentId).to.match(/^d_[a-z0f]+$/)
+    expect(res.json.data.siteId).to.equal(ctx.siteId)
+    expect(res.json.data.createdAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
+    ctx.deploymentId1 = res.json.data.deploymentId
+
+    // check dep 1
+    res = await api.GET(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId1}`)
+    expect(res.status).to.equal(200)
+    expect(res.json.status).to.equal('OK')
+    expect(res.json.data.deploymentId).to.equal(ctx.deploymentId1)
+
+    // promote dep 1
+    res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId1}/promote`)
+    expect(res.status).to.equal(200)
+    expect(res.json.status).to.equal('OK')
+    expect(res.json.data.siteId).to.equal(ctx.siteId)
+    expect(res.json.data.deployedAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
+    expect(res.json.data.status).to.exist
+
+    // check site status
+    res = await api.GET(`/sites/${ctx.siteId}`)
+    expect(res.status).to.equal(200)
+    expect(res.json.status).to.equal('OK')
+    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
+    expect(res.json.data.deployedAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
+
+    if (!res.wasCached) {
+      console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
+      await prompts.confirm({ message: 'deployed?' })
+    }
+
+    // create dep 2
+    const tarball2 = await createTarball(path.join(__dirname, '..', 'example-dist'), { exclude: ['*.txt'] })
+    res = await api.POST(`/sites/${ctx.siteId}/deployments`, {
+      body: (await buffer(tarball2)),
+      headers: {
+        'Content-Type': 'application/gzip'
+      }
+    })
+    expect(res.status).to.equal(201)
+    // expect(res.json.data.deploymentId).to.match(/^d_[a-z0f]+$/)
+    ctx.deploymentId2 = res.json.data.deploymentId
+
+    // check site status
+    res = await api.GET(`/sites/${ctx.siteId}`)
+    expect(res.status).to.equal(200)
+    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
+
+    // promote 2
+    res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId2}/promote`)
+    expect(res.status).to.equal(200)
+    expect(res.json.status).to.equal('OK')
+
+    if (!res.wasCached) {
+      console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
+      await prompts.confirm({ message: 'deployed?' })
+    }
+
+    // check site status
+    res = await api.GET(`/sites/${ctx.siteId}`)
+    expect(res.status).to.equal(200)
+    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId2)
+
+    // re-promote existing deploy
+    res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId2}/promote`)
+    expect(res.status).to.equal(202)
+    expect(res.json.status).to.equal('OK')
+
+    // rollback
+    res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId1}/promote`)
+    expect(res.status).to.equal(200)
+    expect(res.json.status).to.equal('OK')
+
+    if (!res.wasCached) {
+      console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
+      await prompts.confirm({ message: 'deployed?' })
+    }
+
+    // check site status
+    res = await api.GET(`/sites/${ctx.siteId}`)
+    expect(res.status).to.equal(200)
+    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
+  }
+}
+
+// async function testUnauthorized(ctx) {
+//   api.clear('Authorization')
+
+//   const tests = async function* () {
+//     yield api.GET(`/sites`)
+//     yield api.POST('/sites')
+//     yield api.GET(`/sites/${ctx.siteId}`)
+//     yield api.PUT(`/sites/${ctx.siteId}`)
+//     yield api.POST(`/sites/${ctx.siteId}/deployKey/regenerate`)
+//     yield api.DELETE(`/sites/${ctx.siteId}`)
+//   }
+
+//   for await (const res of tests) {
+//     expect(res.status).to.equal(401)
+//     expect(res.json.status).to.equal('ERROR')
+//     expect(res.json.error.message).to.match(/Authorization Failed/)
+//   }
+// }
+
+// async function testDeployKey (ctx) {
+// revoke
+// print once
+// new key works
+// old key doesnt
+// }
+
+// async function testDelete (ctx) {
+//   // delete site
+//   // test get after
+// }
+
+runTests(testRunning, testAuth, testSite, testDeploy)
