@@ -36,6 +36,7 @@ module.exports.configure = ({ level, pretty } = {}) => {
       })
     ]
   })
+  return this
 }
 
 module.exports.getLogger = () => {

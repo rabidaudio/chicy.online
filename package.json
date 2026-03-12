@@ -33,7 +33,6 @@
     "@dotenvx/dotenvx": "^1.54.1",
     "chai": "^6.2.2",
     "fetch-vcr": "^3.2.0",
-    "mocha": "^11.3.0",
     "standard": "^17.1.2"
   },
   "scripts": {
@@ -42,15 +41,8 @@
     "lint": "standard --fix",
     "publish": "dotenvx run -- serverless deploy",
     "admin": "bin/admin",
-    "test": "mocha",
+    "test": "node tests/api.test.js",
     "audit": "npm audit --omit dev"
-  },
-  "mocha": {
-    "timeout": 15000,
-    "slow": 3000,
-    "spec": [
-      "tests/**/*.test.js"
-    ]
   },
   "main": "handler.js",
   "directories": {
