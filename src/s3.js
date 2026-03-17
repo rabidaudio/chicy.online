@@ -2,7 +2,8 @@ const {
   S3Client,
   GetObjectCommand,
   ListObjectsCommand,
-  DeleteObjectsCommand
+  DeleteObjectsCommand,
+  DeleteObjectCommand
 } = require('@aws-sdk/client-s3')
 const { Upload } = require('@aws-sdk/lib-storage')
 
@@ -31,6 +32,14 @@ module.exports.download = async (path) => {
     Key: path
   }))
   return await res.Body.transformToWebStream()
+}
+
+module.exports.delete = async (path) => {
+  logger.verbose(`s3: rm s3://${bucketName}/${path}`)
+  await client.send(new DeleteObjectCommand({
+    Bucket: bucketName,
+    Key: path
+  }))
 }
 
 module.exports.deleteRecursive = async (path) => {

@@ -13,11 +13,32 @@ const logger = require('./logger').getLogger()
 
 const s3 = require('./s3')
 
-// where deployments are stored on S3
+// where temporary deployment tarballs are stored in s3
+const getTarballKey = (siteId, deploymentId) => `pending_deployments/${siteId}/${deploymentId}.tar.gz`
+
+// where site git repos are stored on S3
 const getSiteDeploymentsKey = (siteId) => `deployments/${siteId}`
+
+// where a temporary deployment tarball should be uploaded
+const getDeploymentTarballPath = (siteId, deploymentId) => `s3://${process.env.BUCKET_NAME}/${getTarballKey(siteId, deploymentId)}`
+
+// if the given path is a valid temporary tarball path on s3, return it's siteId and deploymentId. Otherwise return null
+const parseDeploymentTarballPath = (path) => {
+  const match = path.match(/^\/pending_deployments\/([a-z0-9-]+)\/([0-9a-f]+).tar.gz$/)
+  if (!match) return null
+  return { siteId: match[1], deploymentId: match[2] }
+}
 
 // where live site content is stored on S3
 const getSiteContentKey = (siteId) => `sites/${siteId}/content`
+
+const getPromoteKey = (siteId) => `pending_deployments/${siteId}/promote`
+
+const parsePromoteKey = async (path) => {
+  const match = path.match(/^\/pending_deployments\/([a-z0-9-]+)\/promote$/)
+  if (!match) return null
+  return { siteId: match[1] }
+}
 
 // the git origin to push/pull to
 const getOrigin = (siteId) => `s3://${process.env.BUCKET_NAME}/${getSiteDeploymentsKey(siteId)}`
@@ -26,6 +47,10 @@ module.exports = {
   getSiteDeploymentsKey,
   getSiteContentKey,
   getOrigin,
+  getDeploymentTarballPath,
+  parseDeploymentTarballPath,
+  getPromoteKey,
+  parsePromoteKey,
 
   // create a stream of a .tar.gz of the directory at the provided path.
   // returns a node stream that can be piped to a file or request.
@@ -38,7 +63,7 @@ module.exports = {
     return ReadableStream.from(tar.create({ cwd: directoryPath, gzip: true }, files))
   },
 
-  deploy: async ({ siteId, deploymentId, tarball, isFirst }) => {
+  deploy: async ({ siteId, deploymentId, tarballPath, isFirst }) => {
     const origin = getOrigin(siteId)
     const repo = new Repo({ origin, deploymentId })
     await repo.prepare()
@@ -51,6 +76,9 @@ module.exports = {
       logger.info('deleting existing files')
       await repo.clearWorkingDirectory()
     }
+
+    logger.info('downloading tarball')
+    const tarball = await s3.download(tarballPath)
     logger.info('extracting tarball')
     await repo.extractTarball(tarball)
     await repo.touch(deploymentId)
@@ -68,9 +96,16 @@ module.exports = {
     await repo.push()
     logger.info('cleaning up')
     await repo.cleanup()
+    await s3.delete(tarballPath)
 
     return commit
   },
+
+  triggerPromotion: async ({ siteId, deploymentId }) => {
+    const key = getPromoteKey(siteId)
+    await s3.upload(key, Buffer.from(deploymentId))
+  },
+
   promote: async ({ siteId, deploymentId }) => {
     const origin = getOrigin(siteId)
     const repo = new Repo({ origin })

@@ -1,3 +1,4 @@
+import { buffer } from 'node:stream/consumers'
 const { randomBytes } = require('node:crypto')
 
 const logger = require('./logger').getLogger()
@@ -7,6 +8,7 @@ const Files = require('./files')
 
 const cfront = require('./cfront')
 const db = require('./db')
+const s3 = require('./s3')
 
 // generate a unique id per deployment which is sequential in time,
 // i.e. when sorted as strings later deployments are always alphabetically
@@ -20,30 +22,33 @@ const generateDeploymentId = () => {
 
 const sanitize = (deployment) => {
   const {
-    deploymentId, siteId, message, createdAt
+    deploymentId, siteId, message, createdAt, state
     // exclude: commitSha, invalidationId,
   } = deployment
-  return { deploymentId, siteId, message, createdAt }
+  const data = { deploymentId, siteId, message, createdAt, state }
+  if (state === 'pending') {
+    data.deploymentPath = Files.getDeploymentTarballPath(siteId, deploymentId)
+  }
+  return data
 }
 
+class NotFoundError extends Error {}
+class InvalidStateError extends Error {}
+
 module.exports = {
+  NotFoundError,
+  InvalidStateError,
+
   // create a new deployment for a site.
-  // Creates a new record in the deployments table, and adds the tarball
-  // to the S3 bucket. DeploymentIds are generated so that they are sequential;
+  // Creates a new record in the deployments table, and generates
+  // temporary credentials for writing the tarball to S3.
+  // . DeploymentIds are generated so that they are sequential;
   // newer deployments are alphabetically after older ones.
   // NOTE: this does not update the content on the site.
   // For that, call promoteDeployment.
-  create: async ({ site, contentTarball, message }) => {
+  create: async ({ site, message }) => {
     const { siteId } = site
     const deploymentId = generateDeploymentId()
-
-    const commitSha = await Files.deploy({
-      siteId, deploymentId, tarball: contentTarball, isFirst: !site.gitInitialized
-    })
-
-    if (!site.gitInitialized) {
-      site = await Sites.update({ ...site, gitInitialized: true })
-    }
 
     logger.info(`create ${siteId}/${deploymentId}`)
     const createdAt = new Date().toISOString()
@@ -51,10 +56,47 @@ module.exports = {
       deploymentId,
       siteId,
       message,
-      commitSha,
+      state: 'pending', // 'ready', 'deployed'
       createdAt
     })
     return sanitize(deployment)
+  },
+
+  // extract a deployment tarball posted to S3
+  // and load into the S3-backed git repo for the site
+  load: async ({ tarballPath }) => {
+    const pathParts = Files.parseDeploymentTarballPath(tarballPath)
+    if (!pathParts) {
+      logger.warn(`Invalid deployment tarball uploaded: ${tarballPath}`)
+      await s3.delete(tarballPath)
+      return
+    }
+
+    const { siteId, deploymentId } = pathParts
+    let deployment = await db.get('deployments', { siteId, deploymentId })
+    let site = await db.get('sites', { siteId })
+    if (!deployment || !siteId || deployment.siteId !== siteId) {
+      logger.warn(`Invalid deployment tarball: ${siteId} / ${deploymentId}`)
+      await s3.delete(tarballPath)
+      return
+    }
+
+    const commitSha = await Files.deploy({
+      siteId, deploymentId, tarballPath, isFirst: !site.gitInitialized
+    })
+
+    if (!site.gitInitialized) {
+      site = await Sites.update({ ...site, gitInitialized: true })
+    }
+
+    deployment = await db.put('deployments', {
+      ...deployment,
+      state: 'ready',
+      commitSha
+    })
+
+    await s3.delete(tarballPath)
+    return deployment
   },
 
   list: async (siteId) => {
@@ -68,13 +110,41 @@ module.exports = {
     const deployment = await db.get('deployments', { siteId, deploymentId })
     return sanitize(deployment)
   },
-  // make the deployment live for the site
-  promote: async ({ site, deploymentId }) => {
+
+  // request a deployment be promoted asynchronously
+  requestPromotion: async ({ site, deploymentId }) => {
     const { siteId } = site
-    let deployment = await db.get('deployments', { siteId, deploymentId })
+    const deployment = await db.get('deployments', { siteId, deploymentId })
+    if (!deployment) { throw new NotFoundError(`Deployment not found: ${siteId}/${deploymentId}`) }
+    if (deployment.state === 'pending') { throw new InvalidStateError(`Deployment is still pending: ${siteId}/${deploymentId}`) }
+
     if (site.currentDeployment === deploymentId) {
     // already deployed, just check the status and return
       return { site, deployment: sanitize(deployment) }
+    }
+
+    Files.triggerPromotion({ siteId, deploymentId })
+    return { site, deployment: sanitize(deployment) }
+  },
+
+  // make the deployment live for the site
+  promote: async ({ promoteKey }) => {
+    const pathParams = Files.parsePromoteKey(promoteKey)
+    if (!pathParams) {
+      logger.warn(`Not a promotion: ${promoteKey}`)
+      return
+    }
+    const { siteId } = pathParams
+
+    const body = await s3.download(promoteKey)
+    const deploymentId = (await buffer(body)).toString('utf8')
+    logger.info(`Promotion requested for ${siteId}`, { deploymentId })
+
+    let site = await db.get('sites', { siteId })
+    let deployment = await db.get('deployments', { siteId, deploymentId })
+    if (!site || !deployment) {
+      logger.warn(`Unknown deployment: ${siteId}/${deploymentId}`)
+      return
     }
 
     site = await Sites.prepareDistribution(site)
@@ -84,10 +154,12 @@ module.exports = {
       logger.info('invalidating cache')
       const invalidation = await cfront.invalidate(site.tenantId)
       deployment = await db.put('deployments', { ...deployment, invalidationId: invalidation.Id })
+      // TODO: await invalidation
     }
+    // TODO: await distribution
 
     logger.info('updating site')
     site = await Sites.trackDeployment(site, deployment)
-    return { site, deployment: sanitize(deployment) }
+    return { site, deployment }
   }
 }

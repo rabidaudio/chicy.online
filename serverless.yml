@@ -110,13 +110,18 @@ provider:
 
 functions:
   api:
-    # NOTE: switching between docker and native handler causes the whole stack to turn over.
-    # perhaps we can delete just the function?
-    # handler: handler.handler
+    handler: handler.apiHandler
+    events:
+      - httpApi: "*"
+  s3:
     image:
       name: appimg
     events:
-      - httpApi: "*"
+      - s3:
+        bucket: DeploymentBucket
+        event: s3:ObjectCreated:*
+        rules:
+          - prefix: pending_deployments/
 
 resources:
   Resources:

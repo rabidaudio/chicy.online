@@ -1,9 +1,7 @@
 const Koa = require('koa')
 const Router = require('@koa/router')
 
-const { configure: configureLogger, getLogger } = require('./logger')
-configureLogger({ level: 'verbose', pretty: false })
-const logger = getLogger()
+const logger = require('./logger').getLogger()
 
 const OAuth = require('./auth/oauth')
 const DeployKeys = require('./auth/deploy_keys')
@@ -12,6 +10,7 @@ const Deployments = require('./deployments')
 
 const { AuthorizationError } = require('./auth/utils')
 const { DomainValidationFailedError } = Sites
+const { NotFoundError, InvalidStateError } = Deployments
 
 const app = new Koa()
 const router = new Router()
@@ -45,6 +44,12 @@ app.use(async (ctx, next) => {
       console.error('authorization error', err)
       ctx.status = 401
       errorData.message = `Authorization Failed: ${err.message}`
+    } else if (err instanceof NotFoundError) {
+      ctx.status = 404
+      errorData.message = err.message
+    } else if (err instanceof InvalidStateError) {
+      ctx.status = 400
+      errorData.message = err.message
     } else {
       // other error
       logger.error('unhandled server error', err)
@@ -272,7 +277,8 @@ router.post('/sites/:siteId/deployments/:deploymentId/promote', requireUserAuthO
   if (ctx.site.currentDeployment === deploymentId) {
     ctx.status = 202 // indicate that site is already live, nothing will happen
   }
-  const promotion = await Deployments.promote({ site: ctx.site, deploymentId })
+
+  const promotion = await Deployments.requestPromotion({ site: ctx.site, deploymentId })
   ctx.site = promotion.site
   const { siteId, deployedAt, status, deployment } = ctx.site
   ctx.body = {
