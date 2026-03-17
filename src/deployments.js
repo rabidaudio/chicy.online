@@ -1,5 +1,4 @@
 const { randomBytes } = require('node:crypto')
-const { buffer } = require('node:stream/consumers')
 
 const logger = require('./logger').getLogger()
 
@@ -53,7 +52,10 @@ module.exports = {
     const deploymentId = generateDeploymentId()
 
     const uploadPath = Files.getDeploymentTarballPath(siteId, deploymentId)
-    const credentials = await sts.getTemporaryCredentials({ path: uploadPath, deploymentId })
+    const credentials = await sts.getTemporaryCredentials({
+      path: Files.getTarballKey(siteId, deploymentId),
+      deploymentId
+    })
 
     logger.info(`create ${siteId}/${deploymentId}`)
     const createdAt = new Date().toISOString()
@@ -128,22 +130,20 @@ module.exports = {
       return { site, deployment: sanitize(deployment) }
     }
 
-    Files.triggerPromotion({ siteId, deploymentId })
+    await Files.triggerPromotion({ siteId, deploymentId })
     return { site, deployment: sanitize(deployment) }
   },
 
   // make the deployment live for the site
   promote: async ({ promoteKey }) => {
-    const pathParams = Files.parsePromoteKey(promoteKey)
-    if (!pathParams) {
+    const promoteParams = await Files.readPromoteRequest(promoteKey)
+    if (!promoteParams) {
       logger.warn(`Not a promotion: ${promoteKey}`)
       return
     }
-    const { siteId } = pathParams
+    const { siteId, deploymentId } = promoteParams
 
-    const body = await s3.download(promoteKey)
-    const deploymentId = (await buffer(body)).toString('utf8')
-    logger.info(`Promotion requested for ${siteId}`, { deploymentId })
+    logger.info(`Promotion requested for ${siteId} / ${deploymentId}`)
 
     let site = await db.get('sites', { siteId })
     let deployment = await db.get('deployments', { siteId, deploymentId })

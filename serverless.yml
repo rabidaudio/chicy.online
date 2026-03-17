@@ -12,7 +12,8 @@ stages:
       hostedZoneId: ${env:HOSTED_ZONE_ID}
       baseDomain: ${env:BASE_DOMAIN}
       appId: ${self:app}-${sls:stage}
-      bucketName: ${param:appId}
+      appBucketName: ${param:appId}
+      uploadsBucketName: ${param:appId}-uploads
       tablePrefix: ${param:appId}
       apiDomain: api.${sls:stage}.${param:baseDomain}
       sitesDomain: sites.${sls:stage}.${param:baseDomain}
@@ -68,10 +69,10 @@ provider:
             - s3:AbortMultipartUpload
             - s3:ListBucket
           Resource:
-            - Fn::GetAtt: [DeploymentBucket, Arn]
+            - Fn::GetAtt: [AppBucket, Arn]
             - Fn::Join:
               - ''
-              - - Fn::GetAtt: [DeploymentBucket, Arn]
+              - - Fn::GetAtt: [AppBucket, Arn]
                 - '/*'
         - Effect: Allow
           Action:
@@ -110,7 +111,8 @@ provider:
     DISTRIBUTION_DOMAIN: !GetAtt CloudfrontDistroDefaultConnectionGroup.RoutingEndpoint
     S3_PUT_ROLE_ARN: !GetAtt UploadRole.Arn
     TABLE_PREFIX: ${param:tablePrefix}
-    BUCKET_NAME: ${param:bucketName}
+    APP_BUCKET_NAME: ${param:appBucketName}
+    UPLOADS_BUCKET_NAME: ${param:appBucketName}
     GITHUB_CLIENT_ID: ${env:GITHUB_CLIENT_ID}
     GITHUB_CLIENT_SECRET: ${env:GITHUB_CLIENT_SECRET}
 
@@ -125,10 +127,8 @@ functions:
       name: appimg
     events:
       - s3:
-          bucket: ${param:bucketName}
+          bucket: ${param:uploadsBucketName}
           event: s3:ObjectCreated:*
-          rules:
-            - prefix: pending_deployments/
 
 resources:
   Resources:
@@ -203,11 +203,11 @@ resources:
         BillingMode: PAY_PER_REQUEST
         TableName: ${param:tablePrefix}-deployments
     # S3 Bucket 
-    DeploymentBucket:
+    AppBucket:
       Type: AWS::S3::Bucket
       DeletionPolicy: Delete
       Properties:
-        BucketName: ${param:bucketName}
+        BucketName: ${param:appBucketName}
     # A role that can be granted to users temporarily to allow
     # them to upload to S3
     UploadRole:
@@ -219,8 +219,10 @@ resources:
           Statement:
             - Effect: Allow
               Principal:
-                AWS:
-                  Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${param:appId}-${AWS::Region}-lambdaRole
+                Fn::GetAtt: [ IamRoleLambdaExecution, Arn ]
+                # AWS: arn:aws:iam::${aws:accountId}:role/${param:appId}-${aws:region}-lambdaRole
+                # AWS:
+                #   Fn::GetAtt: [ LambdaRole, Arn ] # the role made by serverless for lambda
               Action: sts:AssumeRole
         MaxSessionDuration: 3600
     # A policy that allows the UploadRole access to the bucket.
@@ -242,16 +244,15 @@ resources:
               Resource:
                 - Fn::Join:
                   - '/'
-                  - - Fn::GetAtt: [DeploymentBucket, Arn]
-                    - pending_deployments
+                  - - arn:aws:s3:::${param:uploadsBucketName}
                     - "*"
-    # A policy that allows AccessIdentity to read the contents of DeploymentBucket
+    # A policy that allows AccessIdentity to read the contents of AppBucket
     # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
     BucketPolicy:
       Type: AWS::S3::BucketPolicy
       Properties:
         Bucket:
-          Ref: DeploymentBucket
+          Ref: AppBucket
         PolicyDocument:
           Version: "2012-10-17"
           Id: PolicyForCloudFrontPrivateContent
@@ -264,7 +265,7 @@ resources:
               Resource:
                 - Fn::Join:
                   - '/'
-                  - - Fn::GetAtt: [DeploymentBucket, Arn]
+                  - - Fn::GetAtt: [AppBucket, Arn]
                     - "sites"
                     - "*"
               Condition:
@@ -298,7 +299,7 @@ resources:
           Enabled: true
           DefaultCacheBehavior:
             TargetOriginId:
-              Fn::GetAtt: [DeploymentBucket, Arn]
+              Fn::GetAtt: [AppBucket, Arn]
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD]
             # "CachingOptimized" default cache policy, recommended for S3
@@ -313,9 +314,9 @@ resources:
                     Required: false
           Origins:
             - DomainName:
-                Fn::GetAtt: [DeploymentBucket, RegionalDomainName]
+                Fn::GetAtt: [AppBucket, RegionalDomainName]
               Id:
-                Fn::GetAtt: [DeploymentBucket, Arn]
+                Fn::GetAtt: [AppBucket, Arn]
               OriginAccessControlId:
                 Ref: OAC
               S3OriginConfig:

@@ -13,6 +13,9 @@ const logger = require('./logger').getLogger()
 
 const s3 = require('./s3')
 
+const APP_BUCKET = process.env.APP_BUCKET_NAME
+const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET_NAME
+
 // where temporary deployment tarballs are stored in s3
 const getTarballKey = (siteId, deploymentId) => `pending_deployments/${siteId}/${deploymentId}.tar.gz`
 
@@ -20,11 +23,11 @@ const getTarballKey = (siteId, deploymentId) => `pending_deployments/${siteId}/$
 const getSiteDeploymentsKey = (siteId) => `deployments/${siteId}`
 
 // where a temporary deployment tarball should be uploaded
-const getDeploymentTarballPath = (siteId, deploymentId) => `s3://${process.env.BUCKET_NAME}/${getTarballKey(siteId, deploymentId)}`
+const getDeploymentTarballPath = (siteId, deploymentId) => `s3://${UPLOADS_BUCKET}/${getTarballKey(siteId, deploymentId)}`
 
 // if the given path is a valid temporary tarball path on s3, return it's siteId and deploymentId. Otherwise return null
 const parseDeploymentTarballPath = (path) => {
-  const match = path.match(/^\/pending_deployments\/([a-z0-9-]+)\/(d_[0-9a-f]+).tar.gz$/)
+  const match = path.match(/^\/?pending_deployments\/([a-z0-9-]+)\/(d_[0-9a-f]+).tar.gz$/)
   if (!match) return null
   return { siteId: match[1], deploymentId: match[2] }
 }
@@ -32,16 +35,16 @@ const parseDeploymentTarballPath = (path) => {
 // where live site content is stored on S3
 const getSiteContentKey = (siteId) => `sites/${siteId}/content`
 
-const getPromoteKey = (siteId) => `pending_deployments/${siteId}/promote`
+const getPromoteKey = (siteId) => `pending_promotions/${siteId}.promote`
 
-const parsePromoteKey = async (path) => {
-  const match = path.match(/^\/pending_deployments\/([a-z0-9-]+)\/promote$/)
+const parsePromoteKey = (path) => {
+  const match = path.match(/^\/pending_promotions\/([a-z0-9-]+)\.promote$/)
   if (!match) return null
   return { siteId: match[1] }
 }
 
 // the git origin to push/pull to
-const getOrigin = (siteId) => `s3://${process.env.BUCKET_NAME}/${getSiteDeploymentsKey(siteId)}`
+const getOrigin = (siteId) => `s3://${APP_BUCKET}/${getSiteDeploymentsKey(siteId)}`
 
 module.exports = {
   getSiteDeploymentsKey,
@@ -78,7 +81,7 @@ module.exports = {
     }
 
     logger.info('downloading tarball')
-    const tarball = await s3.download(tarballPath)
+    const tarball = await s3.download(tarballPath, { bucket: UPLOADS_BUCKET })
     logger.info('extracting tarball')
     await repo.extractTarball(tarball)
     await repo.touch(deploymentId)
@@ -96,14 +99,24 @@ module.exports = {
     await repo.push()
     logger.info('cleaning up')
     await repo.cleanup()
-    await s3.delete(tarballPath)
+    await s3.delete(tarballPath, { bucket: UPLOADS_BUCKET })
 
     return commit
   },
 
   triggerPromotion: async ({ siteId, deploymentId }) => {
     const key = getPromoteKey(siteId)
-    await s3.upload(key, Buffer.from(deploymentId))
+    await s3.upload(key, Buffer.from(deploymentId), { bucket: UPLOADS_BUCKET })
+  },
+
+  readPromoteRequest: async (promoteKey) => {
+    const pathParams = parsePromoteKey(promoteKey)
+    if (!pathParams) return null
+
+    const { siteId } = pathParams
+    const body = await s3.download(promoteKey, { bucket: UPLOADS_BUCKET })
+    const deploymentId = (await buffer(body)).toString('utf8')
+    return { siteId, deploymentId }
   },
 
   promote: async ({ siteId, deploymentId }) => {

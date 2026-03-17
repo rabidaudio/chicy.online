@@ -19,11 +19,8 @@ pipx install git-remote-s3
 - finish CLI
 - cleanup
   - json vs text outputs from cli
-  - Cloudfront 404 from S3 returns 403 Permission Denied instead
+  - Cloudfront 404 from S3 returns 403 Permission Denied instead - OAC needs s3:ListBucket permission
   - add Tags to everything for cost tracking
-  - fix timeouts
-    - create deploy sets up a temporary auth to write to s3, returns a url to post to
-    - a separate background job detects new files and unzips them, then updates deployment
 - production deploy
   - callback url
   - cli env var configuration: https://github.com/settings/apps/static-chic-online

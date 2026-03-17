@@ -8,8 +8,7 @@ const logger = require('./logger').getLogger()
 const client = new STSClient()
 
 module.exports.getTemporaryCredentials = async ({ path, deploymentId }) => {
-  const arn = `arn:aws:s3:::${process.env.BUCKET_NAME}${new URL(path).pathname}`
-  // pending_deployments
+  const arn = `arn:aws:s3:::${process.env.UPLOADS_BUCKET_NAME}${path}`
 
   const policy = {
     Version: '2012-10-17',
