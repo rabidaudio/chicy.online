@@ -2,7 +2,7 @@ const path = require('node:path')
 
 const serverless = require('serverless-http')
 
-const logger = require('./logger').configure({ level: 'verbose', pretty: false }).getLogger()
+const logger = require('./src/logger').configure({ level: 'verbose', pretty: false }).getLogger()
 
 const { app } = require('./src/server')
 const Deployments = require('./src/deployments')
@@ -17,7 +17,7 @@ exports.deployHandler = async (event, _context) => {
     if (path.basename(key) === 'promote') {
       await Deployments.promote({ promoteKey: key })
     } else {
-      await Deployments.load({ tarballPath: key })
+      await Deployments.process({ tarballPath: key })
     }
   }
 }

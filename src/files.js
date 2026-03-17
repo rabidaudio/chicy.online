@@ -24,7 +24,7 @@ const getDeploymentTarballPath = (siteId, deploymentId) => `s3://${process.env.B
 
 // if the given path is a valid temporary tarball path on s3, return it's siteId and deploymentId. Otherwise return null
 const parseDeploymentTarballPath = (path) => {
-  const match = path.match(/^\/pending_deployments\/([a-z0-9-]+)\/([0-9a-f]+).tar.gz$/)
+  const match = path.match(/^\/pending_deployments\/([a-z0-9-]+)\/(d_[0-9a-f]+).tar.gz$/)
   if (!match) return null
   return { siteId: match[1], deploymentId: match[2] }
 }

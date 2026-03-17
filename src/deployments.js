@@ -1,5 +1,5 @@
-import { buffer } from 'node:stream/consumers'
 const { randomBytes } = require('node:crypto')
+const { buffer } = require('node:stream/consumers')
 
 const logger = require('./logger').getLogger()
 
@@ -9,6 +9,7 @@ const Files = require('./files')
 const cfront = require('./cfront')
 const db = require('./db')
 const s3 = require('./s3')
+const sts = require('./sts')
 
 // generate a unique id per deployment which is sequential in time,
 // i.e. when sorted as strings later deployments are always alphabetically
@@ -22,12 +23,13 @@ const generateDeploymentId = () => {
 
 const sanitize = (deployment) => {
   const {
-    deploymentId, siteId, message, createdAt, state
+    deploymentId, siteId, message, createdAt, state, credentials
     // exclude: commitSha, invalidationId,
   } = deployment
   const data = { deploymentId, siteId, message, createdAt, state }
   if (state === 'pending') {
-    data.deploymentPath = Files.getDeploymentTarballPath(siteId, deploymentId)
+    data.uploadPath = Files.getDeploymentTarballPath(siteId, deploymentId)
+    data.credentials = credentials
   }
   return data
 }
@@ -42,13 +44,16 @@ module.exports = {
   // create a new deployment for a site.
   // Creates a new record in the deployments table, and generates
   // temporary credentials for writing the tarball to S3.
-  // . DeploymentIds are generated so that they are sequential;
+  // DeploymentIds are generated so that they are sequential;
   // newer deployments are alphabetically after older ones.
   // NOTE: this does not update the content on the site.
   // For that, call promoteDeployment.
   create: async ({ site, message }) => {
     const { siteId } = site
     const deploymentId = generateDeploymentId()
+
+    const uploadPath = Files.getDeploymentTarballPath(siteId, deploymentId)
+    const credentials = await sts.getTemporaryCredentials({ path: uploadPath, deploymentId })
 
     logger.info(`create ${siteId}/${deploymentId}`)
     const createdAt = new Date().toISOString()
@@ -59,12 +64,12 @@ module.exports = {
       state: 'pending', // 'ready', 'deployed'
       createdAt
     })
-    return sanitize(deployment)
+    return sanitize({ ...deployment, uploadPath, credentials })
   },
 
   // extract a deployment tarball posted to S3
   // and load into the S3-backed git repo for the site
-  load: async ({ tarballPath }) => {
+  process: async ({ tarballPath }) => {
     const pathParts = Files.parseDeploymentTarballPath(tarballPath)
     if (!pathParts) {
       logger.warn(`Invalid deployment tarball uploaded: ${tarballPath}`)

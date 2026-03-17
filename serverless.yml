@@ -91,6 +91,11 @@ provider:
           Action:
             - route53:ChangeResourceRecordSets
           Resource: arn:aws:route53:::hostedzone/${param:hostedZoneId}
+        - Effect: Allow
+          Action:
+            - sts:AssumeRole
+          Resource:
+            - Fn::GetAtt: [UploadRole, Arn]
 
   environment:
     NODE_ENV: ${sls:stage}
@@ -103,6 +108,7 @@ provider:
     DISTRIBUTION_ID: !Ref CloudfrontDistro
     CONNECTION_GROUP_ID: !GetAtt CloudfrontDistroDefaultConnectionGroup.Id
     DISTRIBUTION_DOMAIN: !GetAtt CloudfrontDistroDefaultConnectionGroup.RoutingEndpoint
+    S3_PUT_ROLE_ARN: !GetAtt UploadRole.Arn
     TABLE_PREFIX: ${param:tablePrefix}
     BUCKET_NAME: ${param:bucketName}
     GITHUB_CLIENT_ID: ${env:GITHUB_CLIENT_ID}
@@ -114,14 +120,15 @@ functions:
     events:
       - httpApi: "*"
   s3:
+    ephemeralStorageSize: 1024
     image:
       name: appimg
     events:
       - s3:
-        bucket: DeploymentBucket
-        event: s3:ObjectCreated:*
-        rules:
-          - prefix: pending_deployments/
+          bucket: ${param:bucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: pending_deployments/
 
 resources:
   Resources:
@@ -201,6 +208,43 @@ resources:
       DeletionPolicy: Delete
       Properties:
         BucketName: ${param:bucketName}
+    # A role that can be granted to users temporarily to allow
+    # them to upload to S3
+    UploadRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${param:appId}-s3-put-role
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS:
+                  Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/${param:appId}-${AWS::Region}-lambdaRole
+              Action: sts:AssumeRole
+        MaxSessionDuration: 3600
+    # A policy that allows the UploadRole access to the bucket.
+    # Note that a session policy will further restrict the role to a specific key. However,
+    # an identity-based role allowing putObject must also exist. The result will be the intersection.
+    # see: https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session
+    UploadPolicy:
+      Type: AWS::IAM::RolePolicy
+      Properties:
+        PolicyName: ${param:appId}-s3-put-policy
+        RoleName:
+          Ref: UploadRole
+        PolicyDocument:
+          Version: "2012-10-17"
+          Id: ${param:appId}-s3-put-policy
+          Statement:
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource:
+                - Fn::Join:
+                  - '/'
+                  - - Fn::GetAtt: [DeploymentBucket, Arn]
+                    - pending_deployments
+                    - "*"
     # A policy that allows AccessIdentity to read the contents of DeploymentBucket
     # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
     BucketPolicy:
@@ -228,7 +272,8 @@ resources:
                   AWS:SourceArn:
                     - Fn::Join:
                       - '/'
-                      - - "arn:aws:cloudfront::*:distribution"
+                      - - Fn::Sub:
+                            "arn:aws:cloudfront::${AWS::AccountId}:distribution"
                         - Ref: CloudfrontDistro
     # Access control to allow cloudfront to access data in the bucket
     OAC:

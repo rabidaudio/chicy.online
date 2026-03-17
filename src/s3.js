@@ -11,33 +11,44 @@ const logger = require('./logger').getLogger()
 
 const client = new S3Client()
 
-const bucketName = process.env.BUCKET_NAME
+const APP_BUCKET = process.env.BUCKET_NAME
 
-module.exports.upload = async (path, file, { contentType } = {}) => {
+module.exports.upload = async (path, file, { contentType, credentials } = {}) => {
+  let bucket = APP_BUCKET
+  let key = path
+  try {
+    const url = new URL(path)
+    if (url.protocol === 's3:') {
+      bucket = url.host
+      key = url.pathname.replace(/^\//, '')
+    }
+  } catch (err) { /* Type error: not a url. Assume it's a path */ }
   const params = {
-    Bucket: bucketName,
-    Key: path,
+    Bucket: bucket,
+    Key: key,
     Body: file
   }
   if (contentType) params.ContentType = contentType
-  logger.verbose(`s3: upload s3://${bucketName}/${path}`)
-  const task = new Upload({ client, params })
+  const s3client = credentials ? new S3Client({ credentials }) : client
+  logger.verbose(`s3: upload s3://${bucket}/${key}`, params)
+
+  const task = new Upload({ client: s3client, params })
   await task.done()
 }
 
 module.exports.download = async (path) => {
-  logger.verbose(`s3: download s3://${bucketName}/${path}`)
+  logger.verbose(`s3: download s3://${APP_BUCKET}/${path}`)
   const res = await client.send(new GetObjectCommand({
-    Bucket: bucketName,
+    Bucket: APP_BUCKET,
     Key: path
   }))
   return await res.Body.transformToWebStream()
 }
 
 module.exports.delete = async (path) => {
-  logger.verbose(`s3: rm s3://${bucketName}/${path}`)
+  logger.verbose(`s3: rm s3://${APP_BUCKET}/${path}`)
   await client.send(new DeleteObjectCommand({
-    Bucket: bucketName,
+    Bucket: APP_BUCKET,
     Key: path
   }))
 }
@@ -45,9 +56,9 @@ module.exports.delete = async (path) => {
 module.exports.deleteRecursive = async (path) => {
   let Marker
   while (true) {
-    logger.verbose(`s3: ls s3://${bucketName}/${path}`)
+    logger.verbose(`s3: ls s3://${APP_BUCKET}/${path}`)
     const { Contents, IsTruncated } = await client.send(new ListObjectsCommand({
-      Bucket: bucketName,
+      Bucket: APP_BUCKET,
       Prefix: path,
       Marker
     }))
@@ -56,9 +67,9 @@ module.exports.deleteRecursive = async (path) => {
 
     const keys = Contents.map((c) => c.Key)
     Marker = keys[keys.length - 1]
-    logger.verbose(`s3: rm s3://${bucketName}/${path}`, keys)
+    logger.verbose(`s3: rm s3://${APP_BUCKET}/${path}`, keys)
     await client.send(new DeleteObjectsCommand({
-      Bucket: bucketName,
+      Bucket: APP_BUCKET,
       Delete: { Objects: keys.map((key) => ({ Key: key })) }
     }))
 
