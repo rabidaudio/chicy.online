@@ -8,7 +8,7 @@ const isInteractive = require('is-interactive').default()
 
 const getSiteDomain = (siteId) => `${siteId}.${SITE_DOMAIN}`
 
-const relativeTime = (time) => time ? 'never' : moment(time).fromNow()
+const relativeTime = (time) => time ? moment(time).fromNow() : 'never'
 
 // cmd is a middleware pattern for orchestrating cli commands
 const noOpMiddleware = async (argv, next) => next(argv)

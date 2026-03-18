@@ -166,7 +166,7 @@ async function promote (argv) {
   argv.spinner ||= ora()
   if (isInteractive) console.log(chalk.blue('Promoting deployment ') + chalk.bold(argv.deployment))
   argv.spinner.text = 'Promoting...'
-  await argv.api.promote({ siteId: argv.site, deploymentId: argv.deployment })
+  const { siteId, customDomain } = await argv.api.promote({ siteId: argv.site, deploymentId: argv.deployment })
 
   if (argv.wait) {
     argv.spinner.text = 'Waiting...'
@@ -174,7 +174,10 @@ async function promote (argv) {
   }
 
   if (isInteractive) {
-    argv.spinner.succeed(chalk.green('Deployment ' + chalk.bold(argv.deployment) + chalk.green(' is now live.')))
+    argv.spinner.succeed(
+      chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' is now live at ') +
+        chalk.underline(customDomain || getSiteDomain(siteId))
+    )
     if (!argv.wait) {
       console.log('It may take a few minutes for the CDN to invalidate. You may also have to clear your browser cache.')
     }

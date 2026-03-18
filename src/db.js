@@ -62,7 +62,7 @@ module.exports.query = async (table, partition, { asc, idx, limit } = {}) => {
   logger.http(`dynamo: query ${table}: ${partitionKey} = ${partitionValue} ${asc ? 'asc' : 'desc'}`)
   const { Items } = await docClient.send(new QueryCommand(params))
   logger.http(`dynamo: query ${table} results: ${(Items || []).length}`)
-  return Items || []
+  return Object.values(Items || {})
 }
 
 // returns an async generator which will page through the whole table.

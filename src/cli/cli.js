@@ -194,6 +194,7 @@ module.exports = async function main (inArgv = process.argv) {
       // We do this here because we need to figure out verobsity level before importing logger and any
       // dependencies that expect it
       logger = require('../logger').configure({ level: argv.verbose ? 'verbose' : 'warn', pretty: true }).getLogger()
+      logger.verbose('arguments', argv)
       argv.logger = logger
       argv.api = new Api(process.env.SC_HOSTNAME || API_HOST, logger)
       argv.deployKey = process.env.SC_DEPLOY_KEY

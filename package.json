@@ -35,7 +35,6 @@
     "build": "node esbuild.js all",
     "deploy": "dotenvx run -- serverless deploy",
     "publish": "run-s build deploy",
-    "cli": "node src/cli/dev.js",
     "lint": "standard --fix",
     "test": "node tests/api.test.js",
     "audit": "npm audit --omit dev"
