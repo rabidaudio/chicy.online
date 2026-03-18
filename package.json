@@ -19,6 +19,8 @@
     "@koa/bodyparser": "^6.1.0",
     "@koa/router": "^15.3.1",
     "chalk": "^4.1.0",
+    "cli-table3": "^0.6.5",
+    "console-table-printer": "^2.15.0",
     "is-interactive": "^2.0.0",
     "koa": "^3.1.2",
     "lowdb": "^7.0.1",

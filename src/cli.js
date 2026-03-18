@@ -3,6 +3,8 @@ const { hideBin } = require('yargs/helpers')
 const prompts = require('@inquirer/prompts')
 const chalk = require('chalk')
 const moment = require('moment')
+const consoleTablePrinter = require('console-table-printer')
+const CliTable = require('cli-table3')
 
 const isInteractive = require('is-interactive').default()
 
@@ -28,6 +30,36 @@ const until = (checkFn, { interval } = {}) => {
         await delay(interval)
       }
     }
+  }
+}
+
+const showTable = (data) => {
+  if (isInteractive) {
+    consoleTablePrinter.printTable(data)
+  } else {
+    const table = new CliTable({
+      chars: {
+        top: '',
+        'top-mid': '',
+        'top-left': '',
+        'top-right': '',
+        bottom: '',
+        'bottom-mid': '',
+        'bottom-left': '',
+        'bottom-right': '',
+        left: '',
+        'left-mid': '',
+        mid: '',
+        'mid-mid': '',
+        right: '',
+        'right-mid': '',
+        middle: '  '
+      },
+      style: { 'padding-left': 0, 'padding-right': 0 }
+    })
+    if (data[0]) table.push(Object.keys(data[0]).map(k => k.toUpperCase()))
+    table.push(...data.map(d => Object.values(d)))
+    console.log(table.toString())
   }
 }
 
@@ -334,8 +366,12 @@ module.exports = async function main (inArgv = process.argv) {
         return await prompts.input({ message: 'Enter a name for the site:', required: false })
       }
     }))
-    .do(init)
-  )
+    .do(init))
+
+    .command('sites', chalk.bold('list sites attached to account.'), y => y,
+      cmd()
+        .use(authenticateUser)
+        .do(showSites))
 
     .command('configure', chalk.bold('Change the settings of a site.'), y =>
       y.example('configure --site teeny-angle-dwas5 --domain example.com')
@@ -352,6 +388,15 @@ module.exports = async function main (inArgv = process.argv) {
       .use(requestSite)
       .use(demandOption('site'))
       .do(configure))
+
+    .command('deployments', chalk.bold('list deployments for a site.'), y =>
+      y.example('deployments --site teeny-angle-dwas5')
+        .siteOption(),
+    cmd()
+      .use(authenticateUser)
+      .use(requestSite)
+      .use(demandOption('site'))
+      .do(showDeployments))
 
     .command('deploy [path]', chalk.bold('Create a new deployment for the site.\n') +
         chalk.dim('A deployment isn\'t automatically promoted to live by default. Use the ' +
@@ -444,6 +489,29 @@ async function init (argv) {
   process.exit(0)
 }
 
+async function showSites (argv) {
+  const sites = await argv.api.getSites()
+  const colorizeState = (state) => {
+    switch (state) {
+      case 'ready': return chalk.blue(state)
+      case 'deploying': return chalk.yellow(state)
+      case 'deployed': return chalk.green(state)
+      default: return chalk.dim(state)
+    }
+  }
+  showTable(sites.map(({
+    name, siteId, customDomain, state, currentDeployment, createdAt, deployedAt
+  }) => ({
+    name: chalk.black(name),
+    siteId: chalk.bold(siteId),
+    state: colorizeState(state),
+    domain: chalk.underline(customDomain || getSiteDomain(siteId)),
+    deployment: currentDeployment,
+    created: isInteractive ? moment(createdAt).fromNow() : createdAt,
+    published: isInteractive ? (deployedAt ? moment(deployedAt).fromNow() : 'never') : deployedAt
+  })))
+}
+
 async function configure (argv) {
   try {
     const { siteId, customDomain } = await argv.api.updateSite({ siteId: argv.site, customDomain: argv.domain })
@@ -462,6 +530,26 @@ async function configure (argv) {
       process.exit(1)
     }
   }
+}
+
+async function showDeployments (argv) {
+  const deployments = await argv.api.getDeployments({ siteId: argv.site })
+  const colorizeState = (state) => {
+    switch (state) {
+      case 'ready': return chalk.blue(state)
+      case 'pending': return chalk.yellow(state)
+      case 'deployed': return chalk.green(state)
+      default: return chalk.dim(state)
+    }
+  }
+  showTable(deployments.map(({
+    deploymentId, message, createdAt, state
+  }) => ({
+    deploymentId: chalk.bold(deploymentId),
+    state: colorizeState(state),
+    message,
+    created: isInteractive ? moment(createdAt).fromNow() : createdAt
+  })))
 }
 
 async function deploy (argv) {
