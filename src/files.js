@@ -47,6 +47,14 @@ const parsePromoteKey = (path) => {
 // the git origin to push/pull to
 const getOrigin = (siteId) => `s3://${APP_BUCKET}/${getSiteDeploymentsKey(siteId)}`
 
+const allFilesRelative = async (cwd, opts = {}) => {
+  return await Array.fromAsync(async function * () {
+    for await (const entry of glob(['**/*', '**/.*'], { ...opts, cwd, withFileTypes: true })) {
+      if (entry.isFile()) yield path.relative(cwd, path.join(entry.parentPath, entry.name))
+    }
+  }())
+}
+
 module.exports = {
   getSiteDeploymentsKey,
   getSiteContentKey,
@@ -56,10 +64,12 @@ module.exports = {
   parseDeploymentTarballPath,
   getPromoteKey,
   parsePromoteKey,
+  allFilesRelative,
 
   // create a stream of a .tar.gz of the directory at the provided path.
   // returns a node stream that can be piped to a file or request.
-  createTarball: async (directoryPath, { exclude } = { exclude: [] }) => {
+  createTarball: async (directoryPath, { exclude } = {}) => {
+    exclude ||= []
     logger.info(`creating tarball of ${directoryPath}`)
     const files = await allFilesRelative(directoryPath, { exclude })
     for (const file of files) {
@@ -244,12 +254,4 @@ class Repo {
     logger.verbose(`git: rm -rf ${this.cwd}`)
     await rm(this.cwd, { recursive: true, force: true })
   }
-}
-
-const allFilesRelative = async (cwd, opts = {}) => {
-  return await Array.fromAsync(async function * () {
-    for await (const entry of glob(['**/*', '**/.*'], { ...opts, cwd, withFileTypes: true })) {
-      if (entry.isFile()) yield path.relative(cwd, path.join(entry.parentPath, entry.name))
-    }
-  }())
 }

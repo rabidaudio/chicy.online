@@ -27,6 +27,7 @@ pipx install git-remote-s3
 - production deploy
   - callback url
   - cli env var configuration: https://github.com/settings/apps/static-chic-online
+- automatic invalidation via path hashing
 - user caps
 - frontend
 - cli option for using git-remote-s3 directly

@@ -224,6 +224,7 @@ const handleDomainValidationError = async (ctx, next) => {
 }
 
 router.put('/sites/:siteId', requireUserAuth, findSite, handleDomainValidationError, async (ctx) => {
+  // TODO: allow renaming site
   const { customDomain } = ctx.request.body
   let data = ctx.site
   if (customDomain === undefined || (!customDomain && !ctx.site.customDomain) || customDomain === ctx.site.customDomain) {

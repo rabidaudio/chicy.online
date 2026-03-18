@@ -8,7 +8,12 @@ const isInteractive = require('is-interactive').default()
 
 const { getDb } = require('./local_storage')
 
+const API_HOST = 'https://api.dev.static-chic.online'
+const SITE_DOMAIN = 'sites.dev.static-chic.online'
+
 let logger
+
+const getSiteDomain = (siteId) => `${siteId}.${SITE_DOMAIN}`
 
 const until = (checkFn, { interval } = {}) => {
   interval ||= 5000
@@ -23,6 +28,13 @@ const until = (checkFn, { interval } = {}) => {
         await delay(interval)
       }
     }
+  }
+}
+
+class ApiError extends Error {
+  constructor (data, opts = {}) {
+    super(data.message, opts)
+    this.data = data
   }
 }
 
@@ -42,7 +54,7 @@ class Api {
     if (res.status >= 400) {
       if (res.headers.get('content-type').match(/^application\/json/)) {
         const data = await res.json()
-        throw new Error(data.error.message, { data })
+        throw new ApiError(data)
       } else {
         throw new Error('Unknown server error')
       }
@@ -91,6 +103,71 @@ class Api {
         'Content-Type': 'application/json'
       }
     })
+    return data
+  }
+
+  async getSite ({ siteId }) {
+    const { data } = await this.fetch(`/sites/${siteId}`)
+    return data
+  }
+
+  async getSites () {
+    const { data } = await this.fetch('/sites')
+    return data
+  }
+
+  async waitForSite ({ siteId }) {
+    return await until(({ state }) => state !== 'deploying')
+      .poll(async () => await this.getSite({ siteId }))
+  }
+
+  async updateSite ({ siteId, customDomain }) {
+    const { res, data } = await this.fetch(`/sites/${siteId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ customDomain }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    if (res.status === 202) {
+      logger.warn('Nothing changed.')
+    }
+    return data
+  }
+
+  async deploy ({ siteId, message }) {
+    const { data } = await this.fetch(`/sites/${siteId}/deployments`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    return data
+  }
+
+  async getDeployment ({ siteId, deploymentId }) {
+    const { data } = await this.fetch(`/sites/${siteId}/deployments/${deploymentId}`)
+    return data
+  }
+
+  async getDeployments ({ siteId }) {
+    const { data } = await this.fetch(`/sites/${siteId}/deployments`)
+    return data
+  }
+
+  async waitForDeployment ({ siteId, deploymentId }) {
+    return await until(({ state }) => state !== 'pending')
+      .poll(async () => await this.getDeployment({ siteId, deploymentId }))
+  }
+
+  async promote ({ siteId, deploymentId }) {
+    const { res, data } = await this.fetch(`/sites/${siteId}/deployments/${deploymentId}/promote`, {
+      method: 'POST'
+    })
+    if (res.status === 202) {
+      logger.warn('Nothing changed.')
+    }
     return data
   }
 }
@@ -177,21 +254,21 @@ const authenticateDeployKeyOrUser = async (argv, next) => {
 
 const requestSite = requestOption('site', async (argv) => {
   if (isInteractive) {
-    const { data } = await argv.api.getSites()
-    if (data.length === 0) {
+    const sites = await argv.api.getSites()
+    if (sites.length === 0) {
       console.error('You need to create a site first using the `init` command')
       process.exit(1)
     }
     return await prompts.select({
       message: 'Select a site',
-      choices: data.map(({
+      choices: sites.map(({
         siteId,
         name,
         customDomain,
         deployedAt,
         createdAt
       }) => ({
-        name: `${name} [${customDomain || siteId}]`,
+        name: `${name} [${customDomain || getSiteDomain(siteId)}]`,
         value: siteId,
         description: deployedAt ? `last published ${moment(deployedAt).fromNow()}` : `created ${moment(createdAt).fromNow()}`
       }))
@@ -274,9 +351,11 @@ module.exports = async function main (inArgv = process.argv) {
       y.example('deploy --site teeny-angle-dwas5 --promote --wait myapp/dist')
         .positional('path', { describe: 'The path to the root directory of static files', normalize: true })
         .siteOption()
+        .option('message', { alias: 'm', describe: 'an optional description of the deployment' })
         .option('exclude', { alias: 'x', describe: 'a glob of files relative to `path` to exclude from the deployment', type: 'array', default: [] })
         .option('promote', { alias: 'p', describe: 'promote after deployment', type: 'boolean' })
-        .option('wait', { alias: 'w', describe: 'wait for the invalidation to complete (if also promoting)', type: 'boolean' })
+        .option('wait', { alias: 'w', describe: 'wait for the process to complete', type: 'boolean' })
+        .option('dry-run', { describe: 'list the files to be included but do not deploy' })
         .demandOption('path')
         .implies('wait', 'promote'),
     cmd()
@@ -298,15 +377,21 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
-      .use(requestOption('deployment', async () => {
+      .use(requestOption('deployment', async (argv) => {
         if (isInteractive) {
           // TODO: get the site's deployments
+          const deployments = await argv.api.getDeployments({ siteId: argv.site })
+          if (deployments.length === 0) {
+            console.error('No deployments for this site. Create one using the `deploy` command')
+            process.exit(1)
+          }
           return await prompts.select({
             message: 'Select a deployment',
-            choices: [
-              { name: chalk.bold('*added new posts [d55156]'), value: 'd55156', description: 'created today' },
-              { name: 'initial [304c19]', value: '304c19', description: 'updated 1 year ago' }
-            ]
+            choices: deployments.map(({ message, deploymentId, createdAt }) => ({
+              name: message ? `${message} [${deploymentId}]` : `[${deploymentId}]`, // TODO bold if active
+              value: deploymentId,
+              description: `created ${moment(createdAt).fromNow()}`
+            }))
           })
         }
       }))
@@ -327,12 +412,8 @@ module.exports = async function main (inArgv = process.argv) {
     .strictCommands()
     .middleware((argv) => {
       logger = require('./logger').configure({ level: argv.verbose ? 'verbose' : 'warn', pretty: true }).getLogger()
-    })
-    .middleware((argv) => {
       // TODO: hard-coded dev
-      argv.api = new Api(process.env.SC_HOSTNAME || 'https://api.dev.static-chic.online')
-    })
-    .middleware((argv) => {
+      argv.api = new Api(process.env.SC_HOSTNAME || API_HOST)
       argv.deployKey = process.env.SC_DEPLOY_KEY
     })
 
@@ -355,23 +436,75 @@ async function init (argv) {
   process.exit(0)
 }
 
-async function configure ({ site, domain }) {
-  // authenticate
-  // verify domain
-  // set domain (--domain or interactive or error)
-  // print ok
+async function configure (argv) {
+  try {
+    const { siteId, customDomain } = await argv.api.updateSite({ siteId: argv.site, customDomain: argv.domain })
+    if (isInteractive) {
+      if (customDomain) {
+        console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain))
+      } else {
+        console.log(chalk.green('Custom domain removed. ') +
+          'You can still access your site at ' + chalk.underline(getSiteDomain(siteId)))
+      }
+    }
+    process.exit(0)
+  } catch (err) {
+    if (err instanceof ApiError) {
+      logger.warn(err.message)
+      process.exit(1)
+    }
+  }
 }
 
-async function deploy ({ site }) {
-  // authenticate user or deploykey
-  // siteId flag or env var or interactive
-  // tarball [path], --exclude or interactive
-  // deploy
-  // if --promote also promote
-  // if --wait also wait (if interactive wait by default)
+async function deploy (argv) {
+  const { message, exclude, dryRun } = argv
+
+  if (dryRun) {
+    const files = await require('./files').allFilesRelative(argv.path, { exclude })
+    for (const file of files) {
+      console.log(file)
+    }
+
+    process.exit(0)
+  }
+
+  const { deploymentId, siteId, uploadPath, credentials } = await argv.api.deploy({ siteId: argv.site, message })
+
+  const tarball = await require('./files').createTarball(argv.path, { exclude, dryRun })
+  await require('./s3').upload(uploadPath, tarball, { credentials })
+
+  if (argv.wait) {
+    await argv.api.waitForDeployment({ siteId, deploymentId })
+  }
+
+  if (argv.promote) {
+    argv.deployment = deploymentId
+    await promote(argv)
+  } else {
+    if (isInteractive) {
+      console.log(`Deployment Created: ${deploymentId}`)
+    } else {
+      console.log(deploymentId)
+    }
+  }
+  process.exit(0)
 }
 
-async function promote (params) {
-  // authenticate user or deploykey
-  // siteId/deployId
+async function promote (argv) {
+  // siteId, deployedAt, state, deployment
+  // deploymentId, siteId, message, createdAt, state, credentials
+  await argv.api.promote({ siteId: argv.site, deploymentId: argv.deployment })
+
+  if (argv.wait) {
+    await argv.api.waitForSite({ siteId: argv.site })
+  }
+
+  if (isInteractive) {
+    console.log(`Deployment ${argv.deployment} is now live.`)
+    if (!argv.wait) {
+      console.log('It may take a few minutes for the CDN to invalidate. You may also have to clear your browser cache.')
+    }
+  } else {
+    console.log(argv.deployment)
+  }
 }
