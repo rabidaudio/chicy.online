@@ -125,8 +125,6 @@ package:
     - '!test.tar.gz'
     - '!src/**'
     - '!tests/**'
-    # TODO: include dependencies in bundle
-    # - '!node_modules'
     - '!dist/**'
     - 'dist/api_handler.js'
 

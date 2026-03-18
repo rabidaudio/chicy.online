@@ -12,8 +12,10 @@
   - automatic invalidation via path hashing
     - .chic.config file for ignores and keeps
   - rollback -n 1
+  - rename sites
   - admin cli
   - user caps
+  - cleanup timer task
 - frontend
 - Custom deployments
   - solution for env vars in cli - esbuild

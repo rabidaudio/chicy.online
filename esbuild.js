@@ -30,7 +30,7 @@ function build (command) {
       esbuild.buildSync({
         entryPoints: ['api.handler.js'],
         bundle: true,
-        // minify: true,
+        minify: true,
         platform: 'node',
         packages: 'external',
         target: ['node24'],
@@ -42,7 +42,7 @@ function build (command) {
       esbuild.buildSync({
         entryPoints: ['s3.handler.js'],
         bundle: true,
-        // minify: true,
+        minify: true,
         platform: 'node',
         packages: 'external',
         target: ['node24'],
