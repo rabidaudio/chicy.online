@@ -88,22 +88,31 @@ module.exports = {
       return
     }
 
-    const commitSha = await Files.deploy({
-      siteId, deploymentId, tarballPath, isFirst: !site.gitInitialized
-    })
+    try {
+      const commitSha = await Files.deploy({
+        siteId, deploymentId, tarballPath, isFirst: !site.gitInitialized
+      })
 
-    if (!site.gitInitialized) {
-      site = await Sites.update({ ...site, gitInitialized: true })
+      if (!site.gitInitialized) {
+        site = await Sites.update({ ...site, gitInitialized: true })
+      }
+
+      deployment = await db.put('deployments', {
+        ...deployment,
+        state: 'ready',
+        commitSha
+      })
+
+      await s3.delete(tarballPath)
+      return deployment
+    } catch (err) {
+      deployment = await db.put('deployments', {
+        ...deployment,
+        state: 'failed'
+      })
+
+      throw err
     }
-
-    deployment = await db.put('deployments', {
-      ...deployment,
-      state: 'ready',
-      commitSha
-    })
-
-    await s3.delete(tarballPath)
-    return deployment
   },
 
   list: async ({ site }) => {
@@ -157,28 +166,33 @@ module.exports = {
       return
     }
 
-    site = await Sites.prepareDistribution(site)
-    await Files.promote({ siteId, deploymentId })
+    try {
+      site = await Sites.prepareDistribution(site)
+      await Files.promote({ siteId, deploymentId })
 
-    if (site.currentDeployment) {
-      logger.info('invalidating cache')
-      const invalidation = await cfront.invalidate(site.tenantId)
-      deployment = await db.put('deployments', { ...deployment, state: 'deployed', invalidationId: invalidation.Id })
+      if (site.currentDeployment) {
+        logger.info('invalidating cache')
+        const invalidation = await cfront.invalidate(site.tenantId)
+        deployment = await db.put('deployments', { ...deployment, state: 'deployed', invalidationId: invalidation.Id })
 
-      logger.info('waiting for invalidation')
-      await until((invalidation) => invalidation.Status !== 'InProgress')
-        .poll(() => cfront.getInvalidation(site.tenantId, invalidation.Id))
-        .then((invalidation) => console.info(`invalidation status: ${invalidation.Status}`))
-    } else {
-      deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
+        logger.info('waiting for invalidation')
+        await until((invalidation) => invalidation.Status !== 'InProgress')
+          .poll(() => cfront.getInvalidation(site.tenantId, invalidation.Id))
+          .then((invalidation) => console.info(`invalidation status: ${invalidation.Status}`))
+      } else {
+        deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
+      }
+      logger.info('waiting for distribution')
+      await until(({ tenant }) => tenant.Status !== 'InProgress')
+        .poll(() => cfront.getTenant(site.tenantId))
+        .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
+
+      logger.info('updating site')
+      site = await Sites.trackDeployment(site, deployment)
+      return { site, deployment }
+    } catch (err) {
+      site = await Sites.trackDeploymentFailed(site, err.message)
+      throw err
     }
-    logger.info('waiting for distribution')
-    await until(({ tenant }) => tenant.Status !== 'InProgress')
-      .poll(() => cfront.getTenant(site.tenantId))
-      .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
-
-    logger.info('updating site')
-    site = await Sites.trackDeployment(site, deployment)
-    return { site, deployment }
   }
 }

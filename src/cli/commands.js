@@ -28,6 +28,7 @@ async function showSites (argv) {
       case 'ready': return chalk.magenta(state)
       case 'deploying': return chalk.yellow(state)
       case 'deployed': return chalk.green(state)
+      case 'failed': return chalk.red(state)
       default: return chalk.dim(state)
     }
   }
@@ -110,6 +111,7 @@ async function showDeployments (argv) {
       case 'ready': return chalk.magenta(state)
       case 'pending': return chalk.yellow(state)
       case 'deployed': return chalk.blue(state)
+      case 'failed': return chalk.red(state)
       default: return chalk.dim(state)
     }
   }

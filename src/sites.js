@@ -151,6 +151,14 @@ module.exports = {
     })
   },
 
+  trackDeploymentFailed: async (site, reason) => {
+    return await db.put('sites', {
+      ...site,
+      state: 'failed',
+      reason
+    })
+  },
+
   regenerateDeployKey: async (site) => {
     site = await db.put('sites', {
       ...site,
