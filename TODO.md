@@ -1,7 +1,5 @@
 # TODO
 
-- cleanup
-  - fix circular dependency issue in CF
 - production deploy
   - callback url
   - cli env var configuration
