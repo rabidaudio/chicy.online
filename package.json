@@ -38,21 +38,27 @@
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.54.1",
     "chai": "^6.2.2",
+    "esbuild": "^0.27.4",
     "fetch-vcr": "^3.2.0",
+    "npm-run-all": "^4.1.5",
     "standard": "^17.1.2"
   },
   "scripts": {
-    "serve": "serverless dev",
     "serve:local": "node src/local_server.js",
+    "build": "node esbuild.js all",
+    "deploy": "dotenvx run -- serverless deploy",
+    "publish": "run-s build deploy",
     "lint": "standard --fix",
-    "publish": "dotenvx run -- serverless deploy",
-    "admin": "bin/admin",
     "test": "node tests/api.test.js",
     "audit": "npm audit --omit dev"
   },
-  "main": "handler.js",
+  "main": "dist/cli.js",
   "directories": {
     "test": "tests"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "bin": {
+    "statchic": "./dist/cli.js"
   },
   "author": "Julien Dorothy, julien@rabidaudio.com",
   "license": "MIT"

@@ -5,3 +5,4 @@ example-dist/
 test.tar.gz
 .DS_Store
 tests/_fixtures
+dist/

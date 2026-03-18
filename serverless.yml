@@ -118,9 +118,21 @@ provider:
     GITHUB_CLIENT_ID: ${env:GITHUB_CLIENT_ID}
     GITHUB_CLIENT_SECRET: ${env:GITHUB_CLIENT_SECRET}
 
+package:
+  patterns:
+    - '!.env'
+    - '!example_dist/**'
+    - '!test.tar.gz'
+    - '!src/**'
+    - '!tests/**'
+    # TODO: include dependencies in bundle
+    # - '!node_modules'
+    - '!dist/**'
+    - 'dist/api_handler.js'
+
 functions:
   api:
-    handler: handler.apiHandler
+    handler: dist/api_handler.apiHandler
     events:
       - httpApi: "*"
   s3:

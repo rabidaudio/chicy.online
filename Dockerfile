@@ -23,5 +23,5 @@ RUN npm install -g npm@11.11.0 && \
 
 COPY src/ ${LAMBDA_TASK_ROOT}/src/
 
-COPY handler.js ${LAMBDA_TASK_ROOT}
-CMD [ "handler.deployHandler" ]
+COPY dist/s3_handler.js ${LAMBDA_TASK_ROOT}
+CMD [ "s3_handler.deployHandler" ]
