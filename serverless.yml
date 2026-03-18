@@ -76,7 +76,7 @@ functions:
       - httpApi: "*"
   s3:
     # give the s3 operation lots of storage and 10m to complete since that's where the bulk of compute happens
-    ephemeralStorageSize: 1024
+    ephemeralStorageSize: 5120
     timeout: 600
     image:
       name: appimg

@@ -1,4 +1,8 @@
+const { stat } = require('node:fs/promises')
+const path = require('node:path')
+
 const chalk = require('chalk')
+const prettyBytes = require('pretty-bytes').default
 const prompts = require('@inquirer/prompts')
 const ora = require('ora').default
 
@@ -132,9 +136,13 @@ async function deploy (argv) {
 
   if (dryRun) {
     const files = await require('../files').allFilesRelative(argv.path, { exclude })
+    let size = 0
     for (const file of files) {
+      const s = await stat(path.join(argv.path, file))
       console.log(file)
+      size += s.size
     }
+    console.log('Total size: ' + chalk.bold(prettyBytes(size)))
     process.exit(0)
   }
 
@@ -142,8 +150,11 @@ async function deploy (argv) {
   argv.spinner.start()
   const { deploymentId, siteId, uploadPath, credentials } = await argv.api.deploy({ siteId: argv.site, message })
   argv.spinner.text = 'Uploading...'
-  const tarball = await require('../files').createTarball(argv.path, { exclude, dryRun })
-  await require('../s3').upload(uploadPath, tarball, { credentials })
+  const tarball = await require('../files').createTarball(argv.path, { exclude })
+  await require('../s3').upload(uploadPath, tarball, {
+    credentials,
+    progress: ({ loaded }) => { argv.spinner.text = `Uploading... ${prettyBytes(loaded)}` }
+  })
 
   if (argv.wait) {
     argv.spinner.text = 'Waiting...'

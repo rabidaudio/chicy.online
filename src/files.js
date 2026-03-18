@@ -145,7 +145,7 @@ module.exports = {
     await s3.deleteRecursive(siteContent)
 
     logger.info('copying files')
-    const files = await allFilesRelative(repo.cwd, { exclude: ['.git'] })
+    const files = await allFilesRelative(repo.cwd, { exclude: ['.git/**'] })
     for (const file of files) {
       const key = path.join(siteContent, file)
       // if we don't specify the content type, CF will send it as a binary file
@@ -173,6 +173,10 @@ class Repo {
     this.git = simpleGit({ baseDir: this.cwd, unsafe: { allowUnsafePack: true } })
   }
 
+  checkStorage () {
+    logger.verbose(execSync('df -h /tmp'))
+  }
+
   async init () {
     logger.verbose('git: git init')
     await this.git.init()
@@ -181,6 +185,7 @@ class Repo {
     logger.verbose('git: git checkout -b main')
     await this.git.checkoutLocalBranch('main')
     await this.config()
+    this.checkStorage()
   }
 
   async config () {
@@ -197,6 +202,7 @@ class Repo {
     logger.verbose(`git: git clone ${this.origin}`)
     await this.git.raw('clone', '-c', 'protocol.s3.allow=always', this.origin, this.cwd)
     await this.config()
+    this.checkStorage()
   }
 
   async checkout (tag) {
@@ -205,7 +211,7 @@ class Repo {
   }
 
   async clearWorkingDirectory () {
-    const files = await allFilesRelative(this.cwd, { exclude: ['.git'] })
+    const files = await allFilesRelative(this.cwd, { exclude: ['.git/**'] })
     logger.verbose('git: git rm -r .')
     await this.git.rm(files)
   }
@@ -234,6 +240,7 @@ class Repo {
     const { commit } = await this.git.commit(message)
     logger.verbose(`git: git tag ${tag}`)
     await this.git.addTag(tag)
+    this.checkStorage()
     return commit
   }
 
@@ -253,5 +260,6 @@ class Repo {
   async cleanup () {
     logger.verbose(`git: rm -rf ${this.cwd}`)
     await rm(this.cwd, { recursive: true, force: true })
+    this.checkStorage()
   }
 }

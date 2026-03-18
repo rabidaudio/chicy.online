@@ -1,5 +1,6 @@
 # TODO
 
+- change to s3 server
 - production deploy
   - callback url
   - cli env var configuration

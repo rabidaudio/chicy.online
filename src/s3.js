@@ -13,7 +13,7 @@ const client = new S3Client()
 
 const APP_BUCKET = process.env.APP_BUCKET_NAME
 
-module.exports.upload = async (path, file, { bucket, contentType, credentials } = {}) => {
+module.exports.upload = async (path, file, { bucket, contentType, credentials, progress } = {}) => {
   bucket ||= APP_BUCKET
   let key = path
   try {
@@ -33,6 +33,9 @@ module.exports.upload = async (path, file, { bucket, contentType, credentials } 
   logger.verbose(`s3: upload s3://${bucket}/${key}`)
 
   const task = new Upload({ client: s3client, params })
+  if (progress) {
+    task.on('httpUploadProgress', progress)
+  }
   await task.done()
 }
 

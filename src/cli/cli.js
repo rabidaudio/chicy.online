@@ -130,8 +130,7 @@ module.exports = async function main (inArgv = process.argv) {
         .option('promote', { alias: 'p', describe: 'promote after deployment', type: 'boolean' })
         .option('wait', { alias: 'w', describe: 'wait for the process to complete', type: 'boolean' })
         .option('dry-run', { describe: 'list the files to be included but do not deploy' })
-        .demandOption('path')
-        .implies('wait', 'promote'),
+        .demandOption('path'),
     cmd()
       .use(authenticateDeployKeyOrUser)
       .use(requestSite)
