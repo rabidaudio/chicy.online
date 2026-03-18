@@ -125,7 +125,7 @@ functions:
       - httpApi: "*"
   s3:
     ephemeralStorageSize: 1024
-    timeout: 120
+    timeout: 10000
     image:
       name: appimg
     events:

@@ -16,7 +16,6 @@ pipx install git-remote-s3
 # TODO
 
 
-- finish CLI
 - cleanup
   - add Tags to everything for cost tracking
   - fix circular dependency issue in CF
@@ -25,12 +24,14 @@ pipx install git-remote-s3
 - production deploy
   - callback url
   - cli env var configuration: https://github.com/settings/apps/static-chic-online
-- json vs text outputs from cli
-- automatic invalidation via path hashing
-  - .chic.config file for ignores and keeps
-- user caps
+- new features
+  - json vs text outputs from cli
+  - automatic invalidation via path hashing
+    - .chic.config file for ignores and keeps
+  - rollback -n 1
+  - admin cli
+  - user caps
 - frontend
-- cli option for using git-remote-s3 directly
 - Custom deployments
   - solution for env vars in cli - esbuild
   - flag for private-only in sls to disable github logins

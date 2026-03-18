@@ -251,7 +251,7 @@ router.delete('/sites/:siteId', requireUserAuth, findSite, async (ctx) => {
 })
 
 router.get('/sites/:siteId/deployments', requireUserAuthOrDeployKey, findSite, async (ctx) => {
-  const deployments = await Deployments.list(ctx.params.siteId)
+  const deployments = await Deployments.list({ site: ctx.site })
   // TODO: pagination
   ctx.body = {
     status: 'OK',

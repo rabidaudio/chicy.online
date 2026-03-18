@@ -9,6 +9,7 @@ const CliTable = require('cli-table3')
 const isInteractive = require('is-interactive').default()
 
 const { getDb } = require('./local_storage')
+const { until } = require('./poll')
 
 const API_HOST = 'https://api.dev.static-chic.online'
 const SITE_DOMAIN = 'sites.dev.static-chic.online'
@@ -16,22 +17,6 @@ const SITE_DOMAIN = 'sites.dev.static-chic.online'
 let logger
 
 const getSiteDomain = (siteId) => `${siteId}.${SITE_DOMAIN}`
-
-const until = (checkFn, { interval } = {}) => {
-  interval ||= 5000
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  return {
-    poll: async (loopFn) => {
-      while (true) {
-        const res = await loopFn()
-        if (await checkFn(res)) {
-          return res
-        }
-        await delay(interval)
-      }
-    }
-  }
-}
 
 const showTable = (data) => {
   if (isInteractive) {
@@ -421,7 +406,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(demandOption('site'))
       .do(deploy))
 
-    .command('promote [deployment]', chalk.bold('Make a deployment live.'), y =>
+    .command(['promote [deployment]', 'rollback [deployment]'], chalk.bold('Make a deployment live.'), y =>
       y.example('promote --wait --site teeny-angle-dwas5 0000019cd5515615dd304c19')
         .siteOption()
         .positional('deployment', {
@@ -444,20 +429,19 @@ module.exports = async function main (inArgv = process.argv) {
           }
           return await prompts.select({
             message: 'Select a deployment',
-            choices: deployments.map(({ message, deploymentId, createdAt }) => ({
-              name: message ? `${message} [${deploymentId}]` : `[${deploymentId}]`, // TODO bold if active
-              value: deploymentId,
-              description: `created ${moment(createdAt).fromNow()}`
-            }))
+            choices: deployments.map(({ message, deploymentId, createdAt, isLive }) => {
+              const name = message ? `${message} [${deploymentId}]` : `[${deploymentId}]`
+              return {
+                name: isLive ? chalk.bold('*' + name) : name,
+                value: deploymentId,
+                description: `created ${moment(createdAt).fromNow()}`
+              }
+            })
           })
         }
       }))
       .use(demandOption('deployment'))
       .do(promote))
-
-  // authenticate user or deploykey
-  // if interactive, show a list of deployments else if specified else -n count else -n -1
-  // .command('rollback')
 
     .command('remove', chalk.bold('delete a site.'), y =>
       y.example('remove --site teeny-angle-dwas5')
@@ -504,7 +488,7 @@ async function showSites (argv) {
   const sites = await argv.api.getSites()
   const colorizeState = (state) => {
     switch (state) {
-      case 'ready': return chalk.blue(state)
+      case 'ready': return chalk.magenta(state)
       case 'deploying': return chalk.yellow(state)
       case 'deployed': return chalk.green(state)
       default: return chalk.dim(state)
@@ -547,17 +531,17 @@ async function showDeployments (argv) {
   const deployments = await argv.api.getDeployments({ siteId: argv.site })
   const colorizeState = (state) => {
     switch (state) {
-      case 'ready': return chalk.blue(state)
+      case 'ready': return chalk.magenta(state)
       case 'pending': return chalk.yellow(state)
-      case 'deployed': return chalk.green(state)
+      case 'deployed': return chalk.blue(state)
       default: return chalk.dim(state)
     }
   }
   showTable(deployments.map(({
-    deploymentId, message, createdAt, state
+    deploymentId, message, createdAt, state, isLive
   }) => ({
     deploymentId: chalk.bold(deploymentId),
-    state: colorizeState(state),
+    state: isLive ? chalk.bold(chalk.green('live')) : colorizeState(state),
     message,
     created: isInteractive ? moment(createdAt).fromNow() : createdAt
   })))
@@ -576,11 +560,12 @@ async function deploy (argv) {
   }
 
   const { deploymentId, siteId, uploadPath, credentials } = await argv.api.deploy({ siteId: argv.site, message })
-
+  if (isInteractive) console.log('Uploading...')
   const tarball = await require('./files').createTarball(argv.path, { exclude, dryRun })
   await require('./s3').upload(uploadPath, tarball, { credentials })
 
   if (argv.wait) {
+    if (isInteractive) console.log('Waiting...')
     await argv.api.waitForDeployment({ siteId, deploymentId })
   }
 
@@ -600,9 +585,11 @@ async function deploy (argv) {
 async function promote (argv) {
   // siteId, deployedAt, state, deployment
   // deploymentId, siteId, message, createdAt, state, credentials
+  if (isInteractive) console.log('Promoting...')
   await argv.api.promote({ siteId: argv.site, deploymentId: argv.deployment })
 
   if (argv.wait) {
+    if (isInteractive) console.log('Waiting...')
     await argv.api.waitForSite({ siteId: argv.site })
   }
 

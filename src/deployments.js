@@ -4,6 +4,7 @@ const logger = require('./logger').getLogger()
 
 const Sites = require('./sites')
 const Files = require('./files')
+const { until } = require('./poll')
 
 const cfront = require('./cfront')
 const db = require('./db')
@@ -22,10 +23,10 @@ const generateDeploymentId = () => {
 
 const sanitize = (deployment) => {
   const {
-    deploymentId, siteId, message, createdAt, state, credentials
+    deploymentId, siteId, message, createdAt, state, credentials, isLive
     // exclude: commitSha, invalidationId,
   } = deployment
-  const data = { deploymentId, siteId, message, createdAt, state }
+  const data = { deploymentId, siteId, message, createdAt, state, isLive }
   if (state === 'pending') {
     data.uploadPath = Files.getDeploymentTarballPath(siteId, deploymentId)
     data.credentials = credentials
@@ -105,10 +106,11 @@ module.exports = {
     return deployment
   },
 
-  list: async (siteId) => {
+  list: async ({ site }) => {
     // TODO: pagination?
+    const { siteId, currentDeployment } = site
     const deployments = await db.query('deployments', { siteId }, { asc: false, limit: 100 })
-    return deployments.map(d => sanitize(d))
+    return deployments.map(d => sanitize({ ...d, isLive: d.deploymentId === currentDeployment }))
   },
 
   get: async ({ site, deploymentId }) => {
@@ -161,10 +163,19 @@ module.exports = {
     if (site.currentDeployment) {
       logger.info('invalidating cache')
       const invalidation = await cfront.invalidate(site.tenantId)
-      deployment = await db.put('deployments', { ...deployment, invalidationId: invalidation.Id })
-      // TODO: await invalidation
+      deployment = await db.put('deployments', { ...deployment, state: 'deployed', invalidationId: invalidation.Id })
+
+      logger.info('waiting for invalidation')
+      await until((invalidation) => invalidation.Status !== 'InProgress')
+        .poll(() => cfront.getInvalidation(site.tenantId, invalidation.Id))
+        .then((invalidation) => console.info(`invalidation status: ${invalidation.Status}`))
+    } else {
+      deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
     }
-    // TODO: await distribution
+    logger.info('waiting for distribution')
+    await until(({ tenant }) => tenant.Status !== 'InProgress')
+      .poll(() => cfront.getTenant(site.tenantId))
+      .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
 
     logger.info('updating site')
     site = await Sites.trackDeployment(site, deployment)
