@@ -22,7 +22,7 @@ pipx install git-remote-s3
   - Cloudfront 404 from S3 returns 403 Permission Denied instead - OAC needs s3:ListBucket permission
   - add Tags to everything for cost tracking
   - fix circular dependency issue in CF
-  - switch to lts node (using docker)
+  - switch to node 24
   - optimize docker image
 - production deploy
   - callback url

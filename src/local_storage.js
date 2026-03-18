@@ -8,6 +8,7 @@ let _db
 module.exports.getDb = async () => {
   if (_db) return _db
 
-  const configDir = path.join(xdg.configDir(), '.static-chic')
-  _db = await new JSONFilePreset(configDir, {})
+  const configDir = path.join(xdg.configDirs()[0], 'static-chic')
+  _db = await JSONFilePreset(configDir, {})
+  return _db
 }

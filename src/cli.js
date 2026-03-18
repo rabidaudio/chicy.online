@@ -2,8 +2,98 @@ const yargs = require('yargs')
 const { hideBin } = require('yargs/helpers')
 const prompts = require('@inquirer/prompts')
 const chalk = require('chalk')
+const moment = require('moment')
 
 const isInteractive = require('is-interactive').default()
+
+const { getDb } = require('./local_storage')
+
+let logger
+
+const until = (checkFn, { interval } = {}) => {
+  interval ||= 5000
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  return {
+    poll: async (loopFn) => {
+      while (true) {
+        const res = await loopFn()
+        if (await checkFn(res)) {
+          return res
+        }
+        await delay(interval)
+      }
+    }
+  }
+}
+
+class Api {
+  constructor (hostname) {
+    this.hostname = hostname
+    this.headers = {
+      Accept: 'application/json'
+    }
+  }
+
+  async fetch (path, opts = {}) {
+    logger.http(`${opts.method || 'GET'} ${path}`)
+    const optsHeaders = opts.headers || {}
+    const args = { ...opts, headers: { ...this.headers, ...optsHeaders } }
+    const res = await global.fetch(`${this.hostname}${path}`, args)
+    if (res.status >= 400) {
+      if (res.headers.get('content-type').match(/^application\/json/)) {
+        const data = await res.json()
+        throw new Error(data.error.message, { data })
+      } else {
+        throw new Error('Unknown server error')
+      }
+    }
+    if (res.headers.get('content-type').match(/^application\/json/)) {
+      const { data } = await res.json()
+      logger.http('response', data)
+      return { res, data }
+    }
+    return { res }
+  }
+
+  authenticateUserToken (token) {
+    this.headers.Authorization = `Basic ${token}`
+  }
+
+  authenticateDeployKey (key) {
+    this.headers.Authorization = `Bearer ${key}`
+  }
+
+  async status () {
+    const { data } = await this.fetch('/')
+    return !!data.userId
+  }
+
+  async signup ({ provider } = {}) {
+    provider ||= 'github'
+    const { data } = await this.fetch('/signup', { method: 'POST', query: { provider } })
+    // const { authReqId, expiresAt, state, authorizationUrl } = data
+    return data
+  }
+
+  async checkSignup ({ authReqId }) {
+    // { authReqId, expiresAt, state, userToken, authorizationUrl }
+    const { data } = await until(({ data }) => data.state !== 'pending').poll(async () => {
+      return await this.fetch(`/signup/${authReqId}`, { method: 'GET' })
+    })
+    return data
+  }
+
+  async createSite ({ name }) {
+    const { data } = await this.fetch('/sites', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    return data
+  }
+}
 
 // cmd is a middleware pattern for orchestrating cli commands
 const noOpMiddleware = async (argv, next) => next(argv)
@@ -41,29 +131,70 @@ const requestOption = (option, requestFn) => async (argv, next) => {
 }
 
 const authenticateUser = async (argv, next) => {
-  console.log('authenticateUser')
-  // check auth token in localStorage
-  //  exists? return it
-  // interactive? go through login flow
-  // throw error token or deploy key is required
-  // TODO: support non-interactive registration?
-  return await next(argv)
-}
+  logger.verbose('check for token in local storage')
+  const db = await getDb()
+  if (db.data.userToken) {
+    logger.verbose('verify token')
+    argv.api.authenticateUserToken(db.data.userToken)
+    const isloggedIn = await argv.api.status()
+    if (isloggedIn) {
+      return await next()
+    } else {
+      await db.update((data) => { data.userToken = null }) // clear token
+    }
+  }
 
-const authenticateUserOrToken = async (argv, next) => {
-  console.log('authenticateUserOrToken')
-  return await next(argv)
-}
-
-const requestSite = requestOption('site', async () => {
   if (isInteractive) {
-    // TODO: get the user's sites
+    // go through login flow
+    const { authReqId, authorizationUrl } = await argv.api.signup('github')
+    console.log('Authenticate using your GitHub account.')
+    console.log(chalk.bold('Open this url in your browser: ') + chalk.underline(authorizationUrl))
+
+    const { state, userToken } = await argv.api.checkSignup({ authReqId })
+    if (state === 'authorized') {
+      logger.verbose('saving token')
+      await db.update((data) => { data.userToken = userToken }) // save token
+      argv.api.authenticateUserToken(userToken)
+      return await next()
+    } else {
+      // TODO: more helpful error
+      console.warn('Unable to authenticate')
+      process.exit(1)
+    }
+  }
+
+  // TODO: more helpful error
+  console.warn('An authentication token or deploy key is required.')
+  process.exit(1)
+}
+
+const authenticateDeployKeyOrUser = async (argv, next) => {
+  if (argv.deployKey) {
+    return await next()
+  }
+  return await authenticateUser(argv, next)
+}
+
+const requestSite = requestOption('site', async (argv) => {
+  if (isInteractive) {
+    const { data } = await argv.api.getSites()
+    if (data.length === 0) {
+      console.error('You need to create a site first using the `init` command')
+      process.exit(1)
+    }
     return await prompts.select({
       message: 'Select a site',
-      choices: [
-        { name: 'Test Site [teeny-angle-dwas5]', value: 'teeny-angle-dwas5', description: 'created today' },
-        { name: 'Test Site 2 [example.com]', value: 'foo-bar-baz', description: 'updated 1 year ago' }
-      ]
+      choices: data.map(({
+        siteId,
+        name,
+        customDomain,
+        deployedAt,
+        createdAt
+      }) => ({
+        name: `${name} [${customDomain || siteId}]`,
+        value: siteId,
+        description: deployedAt ? `last published ${moment(deployedAt).fromNow()}` : `created ${moment(createdAt).fromNow()}`
+      }))
     })
   }
 })
@@ -132,7 +263,7 @@ module.exports = async function main (inArgv = process.argv) {
         })
         .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))),
     cmd()
-      .use(authenticateUserOrToken)
+      .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
       .do(configure))
@@ -149,7 +280,7 @@ module.exports = async function main (inArgv = process.argv) {
         .demandOption('path')
         .implies('wait', 'promote'),
     cmd()
-      .use(authenticateUserOrToken)
+      .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
       .do(deploy))
@@ -164,7 +295,7 @@ module.exports = async function main (inArgv = process.argv) {
         }, '$SC_DEPLOY_ID')
         .option('wait', { alias: 'w', describe: 'wait for the invalidation to complete', type: 'boolean' }),
     cmd()
-      .use(authenticateUserOrToken)
+      .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
       .use(requestOption('deployment', async () => {
@@ -191,19 +322,37 @@ module.exports = async function main (inArgv = process.argv) {
     .help('help')
     .command('help', false, (y) => y, (argv) => { cli.showHelp() })
     .alias('help', 'h')
-    // .option('verbose', { alias: 'v', describe: 'verbose logging' })
+    .option('verbose', { alias: 'v', describe: 'verbose logging' })
     .demandCommand(1, 1, 'command required')
     .strictCommands()
+    .middleware((argv) => {
+      logger = require('./logger').configure({ level: argv.verbose ? 'verbose' : 'warn', pretty: true }).getLogger()
+    })
+    .middleware((argv) => {
+      // TODO: hard-coded dev
+      argv.api = new Api(process.env.SC_HOSTNAME || 'https://api.dev.static-chic.online')
+    })
+    .middleware((argv) => {
+      argv.deployKey = process.env.SC_DEPLOY_KEY
+    })
 
   cli.wrap(Math.min(cli.terminalWidth(), 120))
-  const argv = await cli.parse()
-  console.log(argv)
+  await cli.parse()
 }
 
-async function init ({ name }) {
-  // authenticate
-  // new site (--name or interactive or null)
-  // return new subdomain+deploy_key
+async function init (argv) {
+  const { name } = argv
+  logger.info(`creating new site: ${name}`)
+  const { siteId, deployKey } = await argv.api.createSite({ name })
+
+  if (isInteractive) {
+    console.log(chalk.green('Site created: ') + chalk.bold(`${siteId}.sites.dev.static-chic.online`))
+    console.warn(chalk.gray("This deploy key can be used to deploy your site from a CI server. Be sure to save it, we'll only show it once."))
+    console.log(chalk.bold('Deploy key: ') + deployKey)
+  } else {
+    console.log(`SC_SITE_ID=${siteId} SC_DEPLOY_KEY=${deployKey}`)
+  }
+  process.exit(0)
 }
 
 async function configure ({ site, domain }) {
