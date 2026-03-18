@@ -162,30 +162,35 @@ module.exports = {
   delete: async (siteId) => {
     logger.warn(`deleting site ${siteId}`)
     const { tenantId, etag } = await db.get('sites', { siteId })
-    const deleteDeploymentsForSite = async (siteId) => {
-      for (const { deploymentId } in await db.scan('deployments', { siteId })) {
-        logger.info(`deleting ${siteId}/${deploymentId}`)
-        await db.delete('deployments', { siteId, deploymentId })
-      }
-    }
-    await Promise.all([
-    // delete resources
-      (tenantId
-        ? cfront.deleteTenant({ tenantId, etag }).then(logger.info(`[${siteId}] deleted distribution tenant`))
-        : Promise.resolve()
-      ).then(() => r53.deleteSubdomain(getSiteDomain(siteId)))
-        .then(logger.info(`[${siteId}] deleted subdomain route`)),
 
-      // delete data from S3
-      s3.deleteRecursive(git.getSiteContentKey(siteId)).then(() => logger.info(`[${siteId}] deleted site content`)),
-      s3.deleteRecursive(git.getSiteDeploymentsKey(siteId)).then(() => logger.info(`[${siteId}] deleted deployment data`)),
-      // delete all deployments from db
-      deleteDeploymentsForSite(siteId)
-        .then(() => logger.info(`[${siteId}] deleted deployment history`))
-      // delete site from db
-        .then(() => db.delete('sites', { siteId }))
-        .then(() => logger.info(`[${siteId}] deleted site`))
-    ])
+    // delete resources
+    if (tenantId) {
+      // disable first
+      await cfront.updateTenant({ tenantId, siteId, enabled: false, etag })
+      logger.info(`[${siteId}] disabled distribution tenant`)
+      await cfront.deleteTenant({ tenantId, etag })
+      logger.info(`[${siteId}] deleted distribution tenant`)
+    }
+
+    await r53.deleteSubdomain(getSiteDomain(siteId))
+    logger.info(`[${siteId}] deleted subdomain route`)
+
+    // delete data from S3
+    await s3.deleteRecursive(git.getSiteContentKey(siteId))
+    logger.info(`[${siteId}] deleted site content`)
+    await s3.deleteRecursive(git.getSiteDeploymentsKey(siteId))
+    logger.info(`[${siteId}] deleted deployment data`)
+
+    // delete all deployments from db
+    for (const { deploymentId } in await db.scan('deployments', { siteId })) {
+      logger.info(`deleting ${siteId}/${deploymentId}`)
+      await db.delete('deployments', { siteId, deploymentId })
+    }
+    logger.info(`[${siteId}] deleted deployment history`)
+
+    // delete site from db
+    await db.delete('sites', { siteId })
+    logger.info(`[${siteId}] deleted site`)
     logger.info(`site deleted: ${siteId}`)
   }
 }

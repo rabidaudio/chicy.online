@@ -12,7 +12,7 @@ const logger = require('./logger').getLogger()
 
 const client = new CloudFrontClient()
 
-const tenantParams = ({ siteId, baseDomain, customDomain }) => {
+const tenantParams = ({ siteId, enabled, baseDomain, customDomain }) => {
   const params = {
     Enabled: true,
     DistributionId: process.env.DISTRIBUTION_ID,
@@ -26,6 +26,7 @@ const tenantParams = ({ siteId, baseDomain, customDomain }) => {
       { Name: 'siteId', Value: siteId }
     ]
   }
+  if (enabled !== undefined) params.Enabled = enabled
   if (customDomain) {
     params.Domains.push({ Domain: customDomain })
     params.ManagedCertificateRequest = {
@@ -46,9 +47,9 @@ module.exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
   return { tenant: DistributionTenant, etag: ETag }
 }
 
-module.exports.updateTenant = async ({ tenantId, siteId, baseDomain, customDomain, etag }) => {
+module.exports.updateTenant = async ({ tenantId, siteId, enabled, baseDomain, customDomain, etag }) => {
   const params = {
-    ...tenantParams({ siteId, baseDomain, customDomain }),
+    ...tenantParams({ siteId, enabled, baseDomain, customDomain }),
     Id: tenantId,
     IfMatch: etag
   }
