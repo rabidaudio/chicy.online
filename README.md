@@ -17,14 +17,13 @@ pipx install git-remote-s3
 
 
 - cleanup
-  - add Tags to everything for cost tracking
   - fix circular dependency issue in CF
-  - optimize docker image
-  - refactor cli
 - production deploy
   - callback url
-  - cli env var configuration: https://github.com/settings/apps/static-chic-online
+  - cli env var configuration
+  - https://github.com/settings/apps/static-chic-online
 - new features
+  - refactor cli
   - json vs text outputs from cli
   - automatic invalidation via path hashing
     - .chic.config file for ignores and keeps
