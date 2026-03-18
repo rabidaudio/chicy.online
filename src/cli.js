@@ -76,8 +76,9 @@ class Api {
   }
 
   async status () {
-    const { data } = await this.fetch('/')
-    return !!data.userId
+    const { data, res } = await this.fetch('/')
+    const isLoggedIn = !!data.userId
+    return { isLoggedIn, res }
   }
 
   async signup ({ provider } = {}) {
@@ -213,8 +214,14 @@ const authenticateUser = async (argv, next) => {
   if (db.data.userToken) {
     logger.verbose('verify token')
     argv.api.authenticateUserToken(db.data.userToken)
-    const isloggedIn = await argv.api.status()
-    if (isloggedIn) {
+    const { isLoggedIn, res } = await argv.api.status()
+    if (isLoggedIn) {
+      // store refreshed user tokens
+      if (res.headers.get('new-authorization')) {
+        const token = res.headers.get('new-authorization').replace(/^Basic /, '')
+        argv.api.authenticateUserToken(token)
+        await db.update((data) => { data.userToken = token })
+      }
       return await next()
     } else {
       await db.update((data) => { data.userToken = null }) // clear token
@@ -255,6 +262,7 @@ const authenticateDeployKeyOrUser = async (argv, next) => {
 const requestSite = requestOption('site', async (argv) => {
   if (isInteractive) {
     const sites = await argv.api.getSites()
+
     if (sites.length === 0) {
       console.error('You need to create a site first using the `init` command')
       process.exit(1)

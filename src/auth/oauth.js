@@ -111,20 +111,23 @@ const OAuth = {
     const { userId, accessToken, providerName } = parseUserToken(authorizationHeader)
     const provider = findProviderByName(providerName)
 
-    const user = await db.get('users', { userId })
+    let user = await db.get('users', { userId })
     if (!user) throw new AuthorizationError('User not found')
 
-    let res
     try {
-      res = await provider.verifyUser({ user, accessToken })
+      const { accessToken: newAccessToken, ...rest } = await provider.verifyUser({ user, accessToken })
+      user = await db.put('users', {
+        ...user,
+        ...rest
+      })
+      if (newAccessToken) {
+        const userToken = generateUserToken(userId, newAccessToken)
+        return { user, userToken }
+      }
+      return { user }
     } catch (err) {
       throw new AuthorizationError('Authorization of access code failed', { cause: err })
     }
-
-    return await db.put('users', {
-      ...user,
-      ...res
-    })
   }
 }
 

@@ -66,8 +66,11 @@ app.use(async (ctx, next) => {
 app.use(async (ctx, next) => {
   const authToken = ctx.get('Authorization')
   if (OAuth.isBasicToken(authToken)) {
-    ctx.user = await OAuth.authorize(authToken)
-    // TODO: if refreshToken used, return an updated bearerToken
+    const res = await OAuth.authorize(authToken)
+    ctx.user = res.user
+    if (res.userToken) {
+      ctx.set('New-Authorization', `Basic ${res.userToken}`)
+    }
   }
   return await next()
 })

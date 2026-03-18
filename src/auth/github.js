@@ -33,18 +33,26 @@ module.exports = class GithubAuthProvider {
   }
 
   async verifyUser ({ user, accessToken }) {
-    const { refreshToken, refreshTokenExpiresAt } = user
-    if (refreshToken && !isExpired(refreshTokenExpiresAt)) {
-      // TODO: if a refresh token is available, try that
-      // https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens
-      // try {
-      //   const { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt } = getGithubAccessToken({ refreshToken })
-      // } catch (err) {
-      //   throw new AuthorizationError('Authorization of access code failed', { cause: err })
-      // }
+    try {
+      const { name, email, login } = await this.#getUser(accessToken)
+      return { name, email, login }
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        const { refreshToken, refreshTokenExpiresAt } = user
+        if (refreshToken && !isExpired(refreshTokenExpiresAt)) {
+          // if a refresh token is available, try that
+          // https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens
+          try {
+            const newTokens = await this.#getAccessToken({ refreshToken })
+            const res = await this.verifyUser({ accessToken: newTokens.accessToken })
+            return { ...res, ...newTokens }
+          } catch (err) {
+            throw new AuthorizationError('Authorization of access code failed', { cause: err })
+          }
+        }
+      }
+      throw err
     }
-    const { name, email, login } = await this.#getUser(accessToken)
-    return { name, email, login, refreshToken, refreshTokenExpiresAt }
   }
 
   // must pass either code or refresh token
@@ -91,6 +99,10 @@ module.exports = class GithubAuthProvider {
         Accept: 'application/vnd.github+json'
       }
     })
+    if (res.status === 401) {
+      logger.error('github: token expired')
+      throw new AuthorizationError('Token expired')
+    }
     if (res.status !== 200) {
       logger.error('github: get user failed', res.body)
       throw new Error(`Github: get user request failed: ${res.status}`)
