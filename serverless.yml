@@ -264,8 +264,11 @@ resources:
               Effect: Allow
               Principal:
                 Service: cloudfront.amazonaws.com
-              Action: s3:GetObject
+              Action:
+                - s3:GetObject
+                - s3:ListBucket
               Resource:
+                - Fn::GetAtt: [AppBucket, Arn]
                 - Fn::Join:
                   - '/'
                   - - Fn::GetAtt: [AppBucket, Arn]
