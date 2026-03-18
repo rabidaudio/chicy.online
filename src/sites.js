@@ -166,9 +166,10 @@ module.exports = {
     // delete resources
     if (tenantId) {
       // disable first
-      await cfront.updateTenant({ tenantId, siteId, enabled: false, etag })
+      const baseDomain = getSiteDomain(siteId)
+      const res = await cfront.updateTenant({ tenantId, baseDomain, siteId, enabled: false, etag })
       logger.info(`[${siteId}] disabled distribution tenant`)
-      await cfront.deleteTenant({ tenantId, etag })
+      await cfront.deleteTenant({ tenantId, etag: res.etag })
       logger.info(`[${siteId}] deleted distribution tenant`)
     }
 

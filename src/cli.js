@@ -203,6 +203,10 @@ class Api {
     }
     return data
   }
+
+  async deleteSite ({ siteId }) {
+    await this.fetch(`/sites/${siteId}`, { method: 'DELETE' })
+  }
 }
 
 // cmd is a middleware pattern for orchestrating cli commands
@@ -455,7 +459,14 @@ module.exports = async function main (inArgv = process.argv) {
   // if interactive, show a list of deployments else if specified else -n count else -n -1
   // .command('rollback')
 
-  // .command('destroy')
+    .command('remove', chalk.bold('delete a site.'), y =>
+      y.example('remove --site teeny-angle-dwas5')
+        .siteOption(),
+    cmd()
+      .use(authenticateUser)
+      .use(requestSite)
+      .use(demandOption('site'))
+      .do(removeSite))
 
     .help('help')
     .command('help', false, (y) => y, (argv) => { cli.showHelp() })
@@ -603,4 +614,19 @@ async function promote (argv) {
   } else {
     console.log(argv.deployment)
   }
+}
+
+async function removeSite (argv) {
+  if (isInteractive) {
+    const siteId = await prompts.input({
+      message: chalk.red('This will permanently remove the site ') + chalk.bold(argv.site) + chalk.red(' and all data. ') +
+        'Enter the siteId to confirm.'
+    })
+    if (siteId !== argv.site) {
+      console.log(chalk.yellow('Aborted.'))
+      process.exit(10)
+    }
+  }
+  await argv.api.deleteSite({ siteId: argv.site })
+  if (isInteractive) console.log(chalk.green('Site Removed.'))
 }
