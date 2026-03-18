@@ -120,6 +120,7 @@ router.get('/', async (ctx) => {
     data.connectionGroupId = process.env.CONNECTION_GROUP_ID
   }
   if (ctx.user) data.userId = ctx.user.userId
+  if (ctx.site) data.deployKeySiteId = ctx.site.siteId
 
   ctx.body = { status: 'OK', data }
 })

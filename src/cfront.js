@@ -20,7 +20,7 @@ const tenantParams = ({ siteId, enabled, baseDomain, customDomain }) => {
     ConnectionGroupId: process.env.CONNECTION_GROUP_ID,
     Tags: [
       { Name: 'app', Value: process.env.APP_ID },
-      { Name: 'stage', Value: process.env.NODE_ENV },
+      { Name: 'stage', Value: process.env.NODE_ENV }
     ],
     Parameters: [
       { Name: 'siteId', Value: siteId }
