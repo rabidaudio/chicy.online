@@ -1,11 +1,44 @@
 {
-  "name": "cheap-static-sites",
-  "private": true,
-  "type": "commonjs",
-  "version": "1.0.0",
+  "name": "static-chic.online",
+  "version": "0.1.0",
   "description": "Easy and cheap static site hosting on AWS",
-  "engines": {
-    "node": "24"
+  "keywords": [
+    "static",
+    "hosting",
+    "cli"
+  ],
+  "homepage": "https://github.com/rabidaudio/static-chic.online#readme",
+  "bugs": {
+    "url": "https://github.com/rabidaudio/static-chic.online/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rabidaudio/static-chic.online.git"
+  },
+  "license": "MIT",
+  "author": "Julien Dorothy, julien@rabidaudio.com",
+  "type": "commonjs",
+  "main": "dist/cli.js",
+  "bin": {
+    "statchic": "bin/cli"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "serve:local": "node src/local_server.js",
+    "build": "node esbuild.js all",
+    "deploy": "dotenvx run -- serverless deploy",
+    "publish": "run-s build deploy",
+    "cli": "node src/cli/dev.js",
+    "lint": "standard --fix",
+    "test": "node tests/api.test.js",
+    "audit": "npm audit --omit dev"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.1011.0",
@@ -43,23 +76,7 @@
     "npm-run-all": "^4.1.5",
     "standard": "^17.1.2"
   },
-  "scripts": {
-    "serve:local": "node src/local_server.js",
-    "build": "node esbuild.js all",
-    "deploy": "dotenvx run -- serverless deploy",
-    "publish": "run-s build deploy",
-    "lint": "standard --fix",
-    "test": "node tests/api.test.js",
-    "audit": "npm audit --omit dev"
-  },
-  "main": "dist/cli.js",
-  "directories": {
-    "test": "tests"
-  },
-  "files": ["dist", "README.md", "LICENSE"],
-  "bin": {
-    "statchic": "./dist/cli.js"
-  },
-  "author": "Julien Dorothy, julien@rabidaudio.com",
-  "license": "MIT"
+  "engines": {
+    "node": "24"
+  }
 }

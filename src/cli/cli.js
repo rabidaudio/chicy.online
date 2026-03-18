@@ -5,7 +5,6 @@ const chalk = require('chalk')
 
 const { Api } = require('./api')
 const {
-  API_HOST,
   isInteractive,
   getSiteDomain, relativeTime,
   cmd, demandOption, requestOption
@@ -19,17 +18,22 @@ const {
 
 let logger
 
+// These are injected during esbuild
+const BIN_NAME = process.env.BIN_NAME || 'statchic'
+const APP_NAME = process.env.APP_NAME || 'static-chic.online'
+const API_HOST = process.env.API_HOST || 'https://api.static-chic.online'
+
 module.exports = async function main (inArgv = process.argv) {
   const cli = yargs(hideBin(inArgv))
-    .scriptName('statchic') // TODO
+    .scriptName(BIN_NAME)
 
     .usage(`${chalk.bold('$0')}   ` +
-        chalk.green('Create and deploy static sites on', chalk.underline('static-chic.online') + '.\n\n') +
+        chalk.green('Create and deploy static sites on', chalk.underline(APP_NAME) + '.\n\n') +
 
         '  $0 init\n' +
         '  $0 deploy --promote myapp/dist\n\n' +
 
-        chalk.bold('Authentication') + '\n' + chalk.dim(chalk.underline('static-chic.online'),
+        chalk.bold('Authentication') + '\n' + chalk.dim(chalk.underline(APP_NAME),
         'uses GitHub for authentication. When running interactively it will prompt for you ' +
         'to log in if needed and store your authentication token on your device.\n\n') +
 
@@ -41,7 +45,7 @@ module.exports = async function main (inArgv = process.argv) {
 
         chalk.bold('Custom Domains') + '\n' + chalk.dim(
         'Every site is given a site ID which is used as a unique subdomain, e.g. `' +
-        chalk.underline('teeny-angle-dwas5.site.static-chic.online') + '`. ' +
+        chalk.underline(getSiteDomain('teeny-angle-dwas5')) + '`. ' +
         'In addition, you can specify a custom domain, like `' + chalk.underline('www.example.com') + '`. ' +
         'SSL certificate will be automatically provisioned. You will need to create a CNAME record ' +
         'pointing this domain to the default domain for the site before you can attach it to the site. ' +

@@ -2,8 +2,7 @@ const consoleTablePrinter = require('console-table-printer')
 const CliTable = require('cli-table3')
 const moment = require('moment')
 
-const API_HOST = 'https://api.dev.static-chic.online'
-const SITE_DOMAIN = 'sites.dev.static-chic.online'
+const SITE_DOMAIN = process.env.SITE_DOMAIN || 'sites.dev.static-chic.online'
 
 const isInteractive = require('is-interactive').default()
 
@@ -77,8 +76,6 @@ const showTable = (data) => {
 }
 
 module.exports = {
-  API_HOST,
-  SITE_DOMAIN,
   isInteractive,
   relativeTime,
   getSiteDomain,

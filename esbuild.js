@@ -12,6 +12,13 @@ function build (command) {
       esbuild.buildSync({
         entryPoints: ['src/cli/index.js'],
         bundle: true,
+        define: {
+          'process.env.BIN_NAME': '\'statchic\'',
+          'process.env.APP_NAME': '\'static-chic.online\'',
+          'process.env.API_HOST': '\'https://api.static-chic.online\'',
+          'process.env.SITE_DOMAIN': '\'sites.static-chic.online\''
+        },
+        minify: true,
         platform: 'node',
         packages: 'external',
         target: ['node20.20'],
