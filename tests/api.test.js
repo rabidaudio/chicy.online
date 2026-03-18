@@ -8,6 +8,7 @@ const prompts = require('@inquirer/prompts')
 
 const { runTests, Api } = require('./utils')
 const { createTarball } = require('../src/files')
+const s3 = require('../src/s3')
 
 const api = new Api()
 
@@ -72,6 +73,7 @@ async function testSite (ctx) {
   expect(res.json.data.name).to.equal('Test Site')
   expect(res.json.data.userId).to.equal(ctx.userId)
   expect(res.json.data.createdAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
+  expect(res.json.data.state).to.equal('ready')
   expect(res.json.data.currentDeployment).not.to.exist
   expect(res.json.data.deployedAt).not.to.exist
   expect(res.json.data.deployKey).to.match(/^dk_[A-Za-z0-9-_]+$/)
@@ -103,12 +105,7 @@ async function testDeploy (ctx) {
 
     // create dep 1
     const tarball1 = await createTarball(path.join(__dirname, '..', 'example-dist'), { exclude: ['images'] })
-    res = await api.POST(`/sites/${ctx.siteId}/deployments`, {
-      body: (await buffer(tarball1)),
-      headers: {
-        'Content-Type': 'application/gzip'
-      }
-    })
+    res = await api.POST(`/sites/${ctx.siteId}/deployments`)
     expect(res.status).to.equal(201)
     expect(res.json.status).to.equal('OK')
     expect(res.json.data.deploymentId).to.match(/^d_[a-z0-f]+$/)
@@ -117,37 +114,76 @@ async function testDeploy (ctx) {
     expect(res.json.data.message).not.to.exist
     ctx.deploymentId1 = res.json.data.deploymentId
 
+    expect(res.json.data.state).to.equal('pending')
+    expect(res.json.data.uploadPath).to.contain(`/pending_deployments/${ctx.siteId}/${ctx.deploymentId1}.tar.gz`)
+    expect(res.json.data.credentials.accessKeyId).to.exist
+    expect(res.json.data.credentials.secretAccessKey).to.exist
+    expect(res.json.data.credentials.sessionToken).to.exist
+    expect(res.json.data.credentials.expiresAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
+    ctx.credentials = res.json.data.credentials
+    ctx.uploadPath = res.json.data.uploadPath
+
     // check dep 1
     res = await api.GET(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId1}`)
     expect(res.status).to.equal(200)
     expect(res.json.status).to.equal('OK')
     expect(res.json.data.deploymentId).to.equal(ctx.deploymentId1)
+    expect(res.json.data.state).to.equal('pending')
+    expect(res.json.data.uploadPath).to.equal(ctx.uploadPath)
+    expect(res.json.data.credentials).not.to.exist
+
+    // upload using credentials
+    if (!res.wasCached) {
+      await s3.upload(ctx.uploadPath, (await buffer(tarball1)), { credentials: ctx.credentials })
+
+      const deployed = await prompts.confirm({ message: 'Deployment completed?' })
+      expect(deployed).to.be.true
+    }
+
+    // TODO: test security: upload to other paths
+
+    // check dep 1
+    res = await api.GET(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId1}`)
+    expect(res.status).to.equal(200)
+    expect(res.json.status).to.equal('OK')
+    expect(res.json.data.state).to.equal('ready')
+    expect(res.json.data.uploadPath).not.to.exist
+    expect(res.json.data.credentials).not.to.exist
 
     // promote dep 1
     res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId1}/promote`)
     expect(res.status).to.equal(200)
     expect(res.json.status).to.equal('OK')
     expect(res.json.data.siteId).to.equal(ctx.siteId)
-    // TODO: show if deployed
+    expect(res.json.data.state).to.equal('deploying')
+    expect(res.json.data.deployment.deploymentId).to.equal(ctx.deploymentId1)
+
+    if (!res.wasCached) {
+      const promoted = await prompts.confirm({ message: 'Promotion completed?' })
+      expect(promoted).to.be.true
+    }
 
     // check site status
     res = await api.GET(`/sites/${ctx.siteId}`)
     expect(res.status).to.equal(200)
     expect(res.json.status).to.equal('OK')
+    expect(res.json.data.state).to.equal('deployed')
     expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
     expect(res.json.data.deployedAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
 
     if (!res.wasCached) {
       console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
-      await prompts.confirm({ message: 'deployed?' })
+      const live = await prompts.confirm({ message: 'live?' })
+      expect(live).to.be.true
     }
 
     // create dep 2
     const tarball2 = await createTarball(path.join(__dirname, '..', 'example-dist'), { exclude: ['*.txt'] })
-    res = await api.POST(`/sites/${ctx.siteId}/deployments?message=testmessage`, {
-      body: (await buffer(tarball2)),
+
+    res = await api.POST(`/sites/${ctx.siteId}/deployments`, {
+      body: JSON.stringify({ message: 'testmessage' }),
       headers: {
-        'Content-Type': 'application/gzip'
+        'Content-Type': 'application/json'
       }
     })
     expect(res.status).to.equal(201)
@@ -155,10 +191,21 @@ async function testDeploy (ctx) {
     expect(res.json.data.message).to.equal('testmessage')
     ctx.deploymentId2 = res.json.data.deploymentId
 
-    // check site status
-    res = await api.GET(`/sites/${ctx.siteId}`)
-    expect(res.status).to.equal(200)
-    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
+    expect(res.json.data.state).to.equal('pending')
+    expect(res.json.data.uploadPath).to.contain(`/pending_deployments/${ctx.siteId}/${ctx.deploymentId2}.tar.gz`)
+    expect(res.json.data.credentials.accessKeyId).to.exist
+    expect(res.json.data.credentials.secretAccessKey).to.exist
+    expect(res.json.data.credentials.sessionToken).to.exist
+    ctx.credentials = res.json.data.credentials
+    ctx.uploadPath = res.json.data.uploadPath
+
+    // upload using credentials
+    if (!res.wasCached) {
+      await s3.upload(ctx.uploadPath, (await buffer(tarball2)), { credentials: ctx.credentials })
+
+      const deployed = await prompts.confirm({ message: 'Deployment completed?' })
+      expect(deployed).to.be.true
+    }
 
     // promote 2
     res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId2}/promote`)
@@ -167,8 +214,8 @@ async function testDeploy (ctx) {
 
     if (!res.wasCached) {
       console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
-      const deployed = await prompts.confirm({ message: 'deployed?' })
-      expect(deployed).to.be.true
+      const live = await prompts.confirm({ message: 'live?' })
+      expect(live).to.be.true
     }
 
     // check site status
@@ -188,8 +235,8 @@ async function testDeploy (ctx) {
 
     if (!res.wasCached) {
       console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
-      const deployed = await prompts.confirm({ message: 'deployed?' })
-      expect(deployed).to.be.true
+      const live = await prompts.confirm({ message: 'rolled back?' })
+      expect(live).to.be.true
     }
 
     // check site status
@@ -211,7 +258,7 @@ async function testUnauthorized (ctx) {
     yield await api.DELETE(`/sites/${ctx.siteId}`)
   }
 
-  for await (const res of tests) {
+  for await (const res of tests()) {
     expect(res.status).to.equal(401)
     expect(res.json.status).to.equal('ERROR')
     expect(res.json.error.message).to.match(/Authorization Failed/)

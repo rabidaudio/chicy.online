@@ -51,7 +51,6 @@ module.exports = {
     const { siteId } = site
     const deploymentId = generateDeploymentId()
 
-    const uploadPath = Files.getDeploymentTarballPath(siteId, deploymentId)
     const credentials = await sts.getTemporaryCredentials({
       path: Files.getTarballKey(siteId, deploymentId),
       deploymentId
@@ -66,7 +65,7 @@ module.exports = {
       state: 'pending', // 'ready', 'deployed'
       createdAt
     })
-    return sanitize({ ...deployment, uploadPath, credentials })
+    return sanitize({ ...deployment, credentials })
   },
 
   // extract a deployment tarball posted to S3
@@ -120,6 +119,8 @@ module.exports = {
 
   // request a deployment be promoted asynchronously
   requestPromotion: async ({ site, deploymentId }) => {
+    if (site.state === 'deploying') { throw new InvalidStateError('Site is already deploying') }
+
     const { siteId } = site
     const deployment = await db.get('deployments', { siteId, deploymentId })
     if (!deployment) { throw new NotFoundError(`Deployment not found: ${siteId}/${deploymentId}`) }
@@ -129,6 +130,8 @@ module.exports = {
     // already deployed, just check the status and return
       return { site, deployment: sanitize(deployment) }
     }
+
+    site = await Sites.trackDeploymentInProgress(site)
 
     await Files.triggerPromotion({ siteId, deploymentId })
     return { site, deployment: sanitize(deployment) }

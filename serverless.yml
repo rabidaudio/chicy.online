@@ -74,6 +74,8 @@ provider:
               - ''
               - - Fn::GetAtt: [AppBucket, Arn]
                 - '/*'
+            - arn:aws:s3:::${param:uploadsBucketName}
+            - arn:aws:s3:::${param:uploadsBucketName}/*
         - Effect: Allow
           Action:
             # These have no resource
@@ -112,7 +114,7 @@ provider:
     S3_PUT_ROLE_ARN: !GetAtt UploadRole.Arn
     TABLE_PREFIX: ${param:tablePrefix}
     APP_BUCKET_NAME: ${param:appBucketName}
-    UPLOADS_BUCKET_NAME: ${param:appBucketName}
+    UPLOADS_BUCKET_NAME: ${param:uploadsBucketName}
     GITHUB_CLIENT_ID: ${env:GITHUB_CLIENT_ID}
     GITHUB_CLIENT_SECRET: ${env:GITHUB_CLIENT_SECRET}
 
@@ -123,6 +125,7 @@ functions:
       - httpApi: "*"
   s3:
     ephemeralStorageSize: 1024
+    timeout: 120
     image:
       name: appimg
     events:
@@ -219,10 +222,14 @@ resources:
           Statement:
             - Effect: Allow
               Principal:
-                Fn::GetAtt: [ IamRoleLambdaExecution, Arn ]
-                # AWS: arn:aws:iam::${aws:accountId}:role/${param:appId}-${aws:region}-lambdaRole
-                # AWS:
-                #   Fn::GetAtt: [ LambdaRole, Arn ] # the role made by serverless for lambda
+                # TODO: annoyingly, AssumeRolePolicyDocument verifies that the Principal exists before
+                # creating. Because the CF template creates before the Lambda function, we can't reference
+                # it by name. Referencing by CF Fn::GetAtt creates a circular dependency.
+                # We could hypothetically create and manage our own execution role. But for now, we're just
+                # changing it to a valid value on deploy and then linking it on subsequent deploys
+                # Fn::GetAtt: [ IamRoleLambdaExecution, Arn ]
+                AWS: arn:aws:iam::${aws:accountId}:role/${param:appId}-${aws:region}-lambdaRole
+                # Service: ['lambda.amazonaws.com']
               Action: sts:AssumeRole
         MaxSessionDuration: 3600
     # A policy that allows the UploadRole access to the bucket.
@@ -241,11 +248,7 @@ resources:
           Statement:
             - Effect: Allow
               Action: s3:PutObject
-              Resource:
-                - Fn::Join:
-                  - '/'
-                  - - arn:aws:s3:::${param:uploadsBucketName}
-                    - "*"
+              Resource: arn:aws:s3:::${param:uploadsBucketName}/*
     # A policy that allows AccessIdentity to read the contents of AppBucket
     # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
     BucketPolicy:

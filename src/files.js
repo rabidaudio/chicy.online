@@ -3,6 +3,7 @@ const { createReadStream } = require('node:fs')
 const { glob, mkdtemp, rm, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
+const { buffer } = require('node:stream/consumers')
 const { pipeline } = require('node:stream/promises')
 
 const mime = require('mime-types')
@@ -38,7 +39,7 @@ const getSiteContentKey = (siteId) => `sites/${siteId}/content`
 const getPromoteKey = (siteId) => `pending_promotions/${siteId}.promote`
 
 const parsePromoteKey = (path) => {
-  const match = path.match(/^\/pending_promotions\/([a-z0-9-]+)\.promote$/)
+  const match = path.match(/^\/?pending_promotions\/([a-z0-9-]+)\.promote$/)
   if (!match) return null
   return { siteId: match[1] }
 }
@@ -50,6 +51,7 @@ module.exports = {
   getSiteDeploymentsKey,
   getSiteContentKey,
   getOrigin,
+  getTarballKey,
   getDeploymentTarballPath,
   parseDeploymentTarballPath,
   getPromoteKey,
@@ -166,12 +168,25 @@ class Repo {
     await this.git.init()
     logger.verbose('git: git-lfs-s3 install')
     execSync('git-lfs-s3 install', { cwd: this.cwd })
+    logger.verbose('git: git checkout -b main')
+    await this.git.checkoutLocalBranch('main')
+    await this.config()
+  }
+
+  async config () {
+    await this.git.addConfig('user.email', 'bot@static-chic.online')
+    await this.git.addConfig('user.name', 'bot@static-chic.online')
+    await this.git.addConfig('lfs.customtransfer.git-lfs-s3.path', 'git-lfs-s3')
+    await this.git.addConfig('lfs.standalonetransferagent', 'git-lfs-s3')
+    const config = await this.git.listConfig()
+    logger.verbose('git config', config)
   }
 
   async clone () {
     logger.info(`cloning repository ${this.origin}`)
     logger.verbose(`git: git clone ${this.origin}`)
     await this.git.raw('clone', '-c', 'protocol.s3.allow=always', this.origin, this.cwd)
+    await this.config()
   }
 
   async checkout (tag) {

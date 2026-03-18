@@ -20,8 +20,6 @@ class DomainValidationFailedError extends Error {
   }
 }
 
-const serialize = async (site, opts = {}) => sanitize({ ...site, status: (await getStatus(site)) }, opts)
-
 // generate a unique human-friendly id for each site to be used
 // as a subdomain.
 const generateSiteId = () => {
@@ -45,8 +43,6 @@ module.exports = {
   list: async (userId) => {
     // TODO: pagination
     const sites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false, limit: 100 })
-    // return Promise.all(sites.map(s => serialize(s)))
-    // NOTE: not looking up statuses for performance
     return sites.map(s => sanitize(s))
   },
 
@@ -70,20 +66,21 @@ module.exports = {
       name,
       customDomain,
       gitInitialized: false,
+      state: 'ready', // ready -> deploying -> deployed
       createdAt: new Date().toISOString(),
       ...generateDeployKey()
     })
-    return await serialize(site, { showDeployKey: true })
+    return sanitize(site, { showDeployKey: true })
   },
 
   get: async (siteId) => {
     const site = await db.get('sites', { siteId })
-    return await serialize(site)
+    return sanitize(site)
   },
 
   update: async (site) => {
     site = await db.put('sites', site)
-    return await serialize(site)
+    return sanitize(site)
   },
 
   // Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
@@ -124,7 +121,7 @@ module.exports = {
     // otherwise will set on first deploy
 
     site = await db.put('sites', { ...site, customDomain })
-    return await serialize(site)
+    return sanitize(site)
   },
 
   prepareDistribution: async (site) => {
@@ -138,11 +135,19 @@ module.exports = {
     return await db.put('sites', { ...site, tenantId: tenant.Id, etag })
   },
 
+  trackDeploymentInProgress: async (site) => {
+    return await db.put('sites', {
+      ...site,
+      state: 'deploying'
+    })
+  },
+
   trackDeployment: async (site, deployment) => {
     return await db.put('sites', {
       ...site,
       currentDeployment: deployment.deploymentId,
-      deployedAt: new Date().toISOString()
+      deployedAt: new Date().toISOString(),
+      state: 'deployed'
     })
   },
 
@@ -189,7 +194,7 @@ module.exports = {
 const sanitize = (site, { showDeployKey } = {}) => {
   const {
     siteId, name, customDomain, userId,
-    currentDeployment, deployedAt, createdAt, status,
+    currentDeployment, deployedAt, createdAt, state,
     deployKey, deployKeyCreatedAt, deployKeyLastUsedAt
     // excluding:
     // etag, gitInitialized, tenantId
@@ -202,33 +207,9 @@ const sanitize = (site, { showDeployKey } = {}) => {
     currentDeployment,
     deployedAt,
     createdAt,
-    status,
+    state,
     deployKeyCreatedAt,
     deployKeyLastUsedAt,
     deployKey: (showDeployKey ? deployKey : obfuscateDeployKey(deployKey))
   }
-}
-
-const getStatus = async (site) => {
-  const { siteId, currentDeployment, tenantId } = site
-  let status = 'unknown'
-  if (!currentDeployment) {
-    status = 'inactive' // no deployment
-  } else if (!tenantId) {
-    status = 'unknown'
-  } else {
-    const deployment = await db.get('deployments', { siteId, deploymentId: currentDeployment })
-    if (deployment.invalidationId) {
-      const invalidation = await cfront.getInvalidation(tenantId, deployment.invalidationId)
-      if (invalidation.Status) {
-        status = invalidation.Status.toLowerCase()
-      }
-    } else {
-      const distro = await cfront.getTenant(tenantId)
-      if (distro.Status) {
-        status = distro.Status.toLowerCase() // InProgress, Complete, ??
-      }
-    }
-  }
-  return status
 }

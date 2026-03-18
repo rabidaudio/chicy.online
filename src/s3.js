@@ -30,7 +30,7 @@ module.exports.upload = async (path, file, { bucket, contentType, credentials } 
   }
   if (contentType) params.ContentType = contentType
   const s3client = credentials ? new S3Client({ credentials }) : client
-  logger.verbose(`s3: upload s3://${bucket}/${key}`, params)
+  logger.verbose(`s3: upload s3://${bucket}/${key}`)
 
   const task = new Upload({ client: s3client, params })
   await task.done()

@@ -279,11 +279,12 @@ router.post('/sites/:siteId/deployments/:deploymentId/promote', requireUserAuthO
 
   const promotion = await Deployments.requestPromotion({ site: ctx.site, deploymentId })
   ctx.site = promotion.site
-  const { siteId, deployedAt, status, deployment } = ctx.site
+  const { siteId, deployedAt, state } = ctx.site
+  const { deployment } = promotion
   ctx.body = {
     status: 'OK',
     data: {
-      siteId, deployedAt, status, deployment
+      siteId, deployedAt, state, deployment
     }
   }
 })

@@ -14,7 +14,7 @@ exports.deployHandler = async (event, _context) => {
   for (const record of event.Records) {
     const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '))
 
-    if (path.basename(key) === 'promote') {
+    if (path.extname(key) === '.promote') {
       await Deployments.promote({ promoteKey: key })
     } else {
       await Deployments.process({ tarballPath: key })

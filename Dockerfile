@@ -1,6 +1,9 @@
 FROM public.ecr.aws/lambda/nodejs:22
 # FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 
+# https://stackoverflow.com/a/77569212
+ENV LD_LIBRARY_PATH=""
+
 # Install git dependencies
 RUN dnf update -y && \
     dnf install -y \
@@ -8,15 +11,8 @@ RUN dnf update -y && \
     dnf clean all && \
     rm -rf /var/cache/dnf
 
-# https://stackoverflow.com/a/77569212
-RUN LD_LIBRARY_PATH="" pip install git-remote-s3
-
-RUN git lfs install && \
-    git config --global init.defaultBranch main && \
-    git config --global user.email bot@static-chic.online && \
-    git config --global user.name "bot@static-chic.online" && \
-    git config --add --global lfs.customtransfer.git-lfs-s3.path git-lfs-s3 && \
-    git config --add --global lfs.standalonetransferagent git-lfs-s3
+RUN pip install git-remote-s3 && \
+    git lfs install
 
 # Lambda setup
 
