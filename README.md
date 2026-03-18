@@ -18,16 +18,17 @@ pipx install git-remote-s3
 
 - finish CLI
 - cleanup
-  - json vs text outputs from cli
+  
   - Cloudfront 404 from S3 returns 403 Permission Denied instead - OAC needs s3:ListBucket permission
   - add Tags to everything for cost tracking
   - fix circular dependency issue in CF
-  - switch to node 24
   - optimize docker image
 - production deploy
   - callback url
   - cli env var configuration: https://github.com/settings/apps/static-chic-online
+- json vs text outputs from cli
 - automatic invalidation via path hashing
+  - .chic.config file for ignores and keeps
 - user caps
 - frontend
 - cli option for using git-remote-s3 directly

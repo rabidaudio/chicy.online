@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/nodejs:22
+FROM public.ecr.aws/lambda/nodejs:24
 # FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 
 # https://stackoverflow.com/a/77569212

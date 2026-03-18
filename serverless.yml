@@ -24,7 +24,7 @@ stages:
 
 provider:
   name: aws
-  runtime: nodejs22.x
+  runtime: nodejs24.x
   domain: ${param:apiDomain}
   stackTags:
     app: ${self:app}
