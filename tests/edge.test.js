@@ -30,13 +30,13 @@ function testRewriter () {
 function testErrorMatcher () {
   const errorPage = createErrorMatcher({
     errorPages: {
-      404: '/errors/404.html',
+      404: '404.html',
       '500-599': '/errors/500.html'
     }
   })
   expect(errorPage(200)).to.equal(null)
   expect(errorPage(400)).to.equal(null)
-  expect(errorPage(404)).to.equal('/errors/404.html')
+  expect(errorPage(404)).to.equal('/404.html')
   expect(errorPage(405)).to.equal(null)
   expect(errorPage(500)).to.equal('/errors/500.html')
   expect(errorPage(555)).to.equal('/errors/500.html')
@@ -45,7 +45,7 @@ function testErrorMatcher () {
 }
 
 async function testHandler () {
-  kvsHandle.set('config/dh_1234567', {
+  kvsHandle.set('config/example.com', {
     rewriteRules: {
       '^(.*)$': '/root${1}',
       '^(.*)/$': '${1}/index.html',
@@ -62,13 +62,14 @@ async function testHandler () {
 
   let request = await handler({
     context: {
-      distributionId: 'dh_1234567',
       eventType: 'viewer-request'
     },
     request: {
       method: 'GET',
       uri: '/foo/bar/baz',
-      headers: {}
+      headers: {
+        host: { value: 'example.com' }
+      }
     },
     response: {}
   })
@@ -76,13 +77,14 @@ async function testHandler () {
 
   request = await handler({
     context: {
-      distributionId: 'dh_1234567',
       eventType: 'viewer-request'
     },
     request: {
       method: 'GET',
       uri: '/images/fruit.jpg',
-      headers: {}
+      headers: {
+        host: { value: 'example.com' }
+      }
     },
     response: {}
   })
@@ -90,13 +92,14 @@ async function testHandler () {
 
   let response = await handler({
     context: {
-      distributionId: 'dh_1234567',
       eventType: 'viewer-response'
     },
     request: {
       method: 'GET',
       uri: '/images/fruit.jpg',
-      headers: {}
+      headers: {
+        host: { value: 'example.com' }
+      }
     },
     response: {
       statusCode: 200,
@@ -110,14 +113,14 @@ async function testHandler () {
 
   response = await handler({
     context: {
-      distributionId: 'dh_1234567',
       eventType: 'viewer-response'
     },
     request: {
       method: 'GET',
       uri: '/not_found.png',
       headers: {
-        Accept: 'image/png'
+        accept: { value: 'image/png' },
+        host: { value: 'example.com' }
       }
     },
     response: {
@@ -130,14 +133,14 @@ async function testHandler () {
 
   response = await handler({
     context: {
-      distributionId: 'dh_1234567',
       eventType: 'viewer-response'
     },
     request: {
       method: 'GET',
       uri: '/old_page.html',
       headers: {
-        accept: { value: 'text/html' }
+        accept: { value: 'text/html' },
+        host: { value: 'example.com' }
       }
     },
     response: {

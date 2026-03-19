@@ -54,7 +54,7 @@ function buildEdge () {
     bundle: false,
     minify: false,
     treeShaking: false,
-    // drop: ['console'],
+    drop: ['console'],
     platform: 'node',
     packages: 'external',
     target: ['es5'],
@@ -71,7 +71,6 @@ function buildEdge () {
   })
   esbuild.buildSync({
     ...base,
-    drop: ['console'],
     define: {
       CLOUDFORMATION: 'false'
     },

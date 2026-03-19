@@ -356,6 +356,13 @@ resources:
             AllowedMethods: [GET, HEAD]
             # "CachingOptimized" default cache policy, recommended for S3
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN:
+                  Fn::GetAtt: [ EdgeFunction, FunctionARN ]
+              - EventType: viewer-response
+                FunctionARN:
+                  Fn::GetAtt: [ EdgeFunction, FunctionARN ]
           TenantConfig: 
             ParameterDefinitions:
               - Name: siteId
@@ -409,3 +416,22 @@ resources:
         DomainValidationOptions:
           - DomainName: ${param:sitesDomain}
             HostedZoneId: ${param:hostedZoneId}
+    # A function that runs on the edge in CloudFront, transforming requests
+    # based on site configuration.
+    EdgeFunction:
+      Type: AWS::CloudFront::Function
+      Properties:
+        Name: ${param:appId}-edgeFn
+        AutoPublish: true
+        FunctionCode: ${file(read_edge.js):content}
+        FunctionConfig:
+          Comment: ${param:appId}-edgeFn
+          Runtime: cloudfront-js-2.0
+          KeyValueStoreAssociations:
+            - KeyValueStoreARN: 
+                Fn::GetAtt: [ EdgeFunctionKeyValueStore, Arn ]
+    # A key-value store for use with EdgeFunction
+    EdgeFunctionKeyValueStore:
+      Type: AWS::CloudFront::KeyValueStore
+      Properties:
+        Name: ${param:appId}

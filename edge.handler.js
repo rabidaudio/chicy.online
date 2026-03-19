@@ -48,6 +48,9 @@ function createErrorMatcher (config) {
   for (var i = 0; i < entries.length; i++) {
     var key = entries[i][0]
     var value = entries[i][1]
+    if (!value.match(/^\//)) {
+      value = "/" + value
+    }
     if (key.match(/^[0-9]+$/)) {
       var s = parseInt(key, 10)
       matchers.push({ start: s, end: s, errorPage: value })
@@ -69,16 +72,19 @@ function createErrorMatcher (config) {
 }
 
 async function handler (event) {
-  var distributionId = event.context.distributionId
   var request = event.request
   var response = event.response
+  var host = ""
+  if (request.headers && request.headers['host']) {
+    host = request.headers['host'].value
+  }
+
   var config = {}
   try {
-    config = await kvsHandle.get('config/' + distributionId, { format: 'json' })
+    config = await kvsHandle.get('config/' + host, { format: 'json' })
   } catch (err) {
     // don't care, use empty config
   }
-  console.log(`config ${distributionId} ${JSON.stringify(config)}`)
 
   if (event.context.eventType === 'viewer-request') {
     var rewrite = createPathRewriter(config)
@@ -104,7 +110,7 @@ async function handler (event) {
     for (var i = 0; i < entries.length; i++) {
       var key = entries[i][0]
       var value = entries[i][1]
-      response.headers[key.toLowerCase()] = { value }
+      response.headers[key.toLowerCase()] = { value: value }
     }
 
     return response
