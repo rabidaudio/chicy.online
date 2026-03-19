@@ -36,7 +36,8 @@
     "deploy": "dotenvx run -- serverless deploy",
     "publish": "run-s build deploy",
     "lint": "standard --fix",
-    "test": "node tests/index.js",
+    "test:run": "node tests/index.js",
+    "test": "run-s build test:run",
     "audit": "npm audit --omit dev"
   },
   "dependencies": {
@@ -78,5 +79,10 @@
   },
   "engines": {
     "node": "24"
+  },
+  "standard": {
+    "ignore": [
+      "edge.handler.js"
+    ]
   }
 }

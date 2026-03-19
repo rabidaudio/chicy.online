@@ -1,7 +1,9 @@
 {
-  "accessControlAllowOrigin": null,
   "exclude": [],
   "retain": [],
+  "headers": {
+    "Access-Control-Allow-Origin": "*"
+  },
   "errorPages": {
     "404": "404.html"
   },
