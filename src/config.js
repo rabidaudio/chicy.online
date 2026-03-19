@@ -24,12 +24,13 @@ const generateDefaultConfig = () => sanitize({})
 
 const generateCommonConfig = () => sanitize({
   headers: {},
-  rewriteRules: {
+  rewriteRules: [
+    { match: '^$', replace: '/index.html', last: true },
     /* eslint-disable-next-line no-template-curly-in-string */
-    '^(.*)/$': '${1}/index.html',
+    { match: '^(.*?)/$', replace: '${1}/index.html', last: true },
     /* eslint-disable-next-line no-template-curly-in-string */
-    '^(.*)/([^.]+)$': '${1}/${2}/index.html'
-  }
+    { match: '^(.*?)/([^.]+)$', replace: '${1}/${2}/index.html', last: true }
+  ]
 })
 
 const sanitize = (config) => {
@@ -46,12 +47,18 @@ const sanitize = (config) => {
   //   if (!key.match(/([0-9]{3}|[0-9]{3}-[0-9]{3})/)) { throw new ConfigValidationError(`Expected config \`errorPages\` keys to be status code ranges but found \`${key}\``) }
   //   if (typeof val !== 'string') { throw new ConfigValidationError(`Expected config \`errorPages.${key}\` to be a string but found \`${val}\``) }
   // }
-  rewriteRules ||= {}
-  for (const [key, val] of Object.entries(rewriteRules)) {
-    try { RegExp.call(key) } catch (err) { throw new ConfigValidationError('Invalid regex in `rewriteRules`', { cause: err }) }
+  rewriteRules ||= []
+  rewriteRules.forEach(rule => {
+    const { match, replace } = rule
+    try { RegExp.call(match) } catch (err) { throw new ConfigValidationError('Invalid regex in `rewriteRules`', { cause: err }) }
 
-    if (typeof val !== 'string') { throw new ConfigValidationError(`Expected config \`rewriteRules.${key}\` to be a string but found \`${val}\``) }
-  }
+    if (typeof replace !== 'string') { throw new ConfigValidationError(`Expected config \`rewriteRules.${match}\` to be a string but found \`${replace}\``) }
+    rule.last = !!rule.last
+    rule.flags ||= ''
+  })
+
+  // TODO: verify rules won't crash by running a few samples through them
+
   return {
     exclude,
     retain,

@@ -10,14 +10,15 @@ const {
 function testRewriter () {
   const rewrite = createPathRewriter({
     /* eslint-disable no-template-curly-in-string */
-    rewriteRules: {
-      '^(.*)$': '/root${1}',
-      '^(.*)/$': '${1}/index.html',
-      '^(.*)/([^.]+)$': '${1}/${2}/index.html'
-    }
+    rewriteRules: [
+      { match: '^$', replace: '/index.html', last: true },
+      { match: '^/(.*)$', replace: '/root/${1}' },
+      { match: '^(.*?)/$', replace: '${1}/index.html' },
+      { match: '^(.*?)/([^.]+)$', replace: '${1}/${2}/index.html' }
+    ]
   })
 
-  expect(rewrite('')).to.equal('/root/index.html')
+  expect(rewrite('')).to.equal('/index.html')
   expect(rewrite('/')).to.equal('/root/index.html')
   expect(rewrite('/foo')).to.equal('/root/foo/index.html')
   expect(rewrite('/foo/bar/baz')).to.equal('/root/foo/bar/baz/index.html')
@@ -26,30 +27,31 @@ function testRewriter () {
   expect(rewrite('/images/peach.jpg')).to.equal('/root/images/peach.jpg')
 }
 
-function testRewriter2 () {
+function testRewriterFallthrough () {
   const rewrite = createPathRewriter({
     /* eslint-disable no-template-curly-in-string */
-    rewriteRules: {
-      '^$': '/index.html', '^(.*)/([^.]+)$': '${1}/${2}/index.html', '^(.*)/$': '${1}/index.html'
-    }
+    rewriteRules: [
+      { match: '^/(f.+)/?$', replace: '/foo', last: false },
+      { match: '(.*?)o+(.*)', replace: '${1}0${2}', last: true },
+      { match: '^/(.+)$', replace: '/${1}/${1}', last: false }
+    ]
   })
 
-  expect(rewrite('')).to.equal('/index.html')
-  expect(rewrite('/')).to.equal('/index.html')
-  expect(rewrite('/foo')).to.equal('/foo/index.html')
-  expect(rewrite('/foo/bar/baz')).to.equal('/foo/bar/baz/index.html')
-  expect(rewrite('/page.html')).to.equal('/page.html')
-  expect(rewrite('/a/page.html')).to.equal('/a/page.html')
-  expect(rewrite('/images/peach.jpg')).to.equal('/images/peach.jpg')
+  expect(rewrite('')).to.equal('')
+  expect(rewrite('/')).to.equal('/')
+  expect(rewrite('/fab')).to.equal('/f0')
+  expect(rewrite('/fab/')).to.equal('/f0')
+  expect(rewrite('/bar')).to.equal('/bar/bar')
+  expect(rewrite('/booooo')).to.equal('/b0')
 }
 
 async function testHandler () {
   kvsHandle.set('config/example.com', {
-    rewriteRules: {
-      '^(.*)$': '/root${1}',
-      '^(.*)/$': '${1}/index.html',
-      '^(.*)/([^.]+)$': '${1}/${2}/index.html'
-    },
+    rewriteRules: [
+      { match: '^/(.*)$', replace: '/root/${1}' },
+      { match: '^(.*?)/$', replace: '${1}/index.html' },
+      { match: '^(.*?)/([^.]+)$', replace: '${1}/${2}/index.html' }
+    ],
     errorPages: {
       404: '/errors/404.html',
       '500-599': '/errors/500.html'
@@ -111,4 +113,4 @@ async function testHandler () {
   expect(response.headers['access-control-allow-origin'].value).to.equal('*')
 }
 
-runTests(testRewriter, testRewriter2, testHandler)
+runTests(testRewriter, testRewriterFallthrough, testHandler)

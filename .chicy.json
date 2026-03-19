@@ -7,9 +7,9 @@
   "errorPages": {
     "404": "/404.html"
   },
-  "rewriteRules": {
-      "^$": "/index.html",
-      "^(.*)/$": "${1}/index.html",
-      "^(.*)/([^.]+)$": "${1}/${2}/index.html"
-  }
+  "rewriteRules":  [
+    { "match": "^$", "replace": "/index.html", "last": true },
+    { "match": "^(.*?)/$", "replace": "${1}/index.html", "last": true },
+    { "match": "^(.*?)/([^.]+)$", "replace": "${1}/${2}/index.html", "last": true }
+  ]
 }

@@ -53,9 +53,8 @@ function buildEdge () {
   const base = {
     entryPoints: ['edge.handler.js'],
     bundle: false,
-    minify: false,
-    treeShaking: false,
-    drop: ['console'],
+    minify: true,
+    minifyIdentifiers: false,
     platform: 'node',
     packages: 'external',
     target: ['es5'],
@@ -65,6 +64,7 @@ function buildEdge () {
   }
   esbuild.buildSync({
     ...base,
+    drop: ['console'],
     define: {
       CLOUDFORMATION: 'true'
     },
@@ -72,6 +72,7 @@ function buildEdge () {
   })
   esbuild.buildSync({
     ...base,
+    drop: ['console'],
     define: {
       CLOUDFORMATION: 'false'
     },

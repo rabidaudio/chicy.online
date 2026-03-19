@@ -181,20 +181,20 @@ module.exports = {
       if (site.currentDeployment) {
         logger.info('invalidating cache')
         const invalidation = await cfront.invalidate(site.tenantId)
-        deployment = await db.put('deployments', { ...deployment, state: 'deployed', invalidationId: invalidation.Id })
+        deployment = await db.put('deployments', { ...deployment, state: 'deploying', invalidationId: invalidation.Id })
 
         logger.info('waiting for invalidation')
         await until((invalidation) => invalidation.Status !== 'InProgress')
           .poll(() => cfront.getInvalidation(site.tenantId, invalidation.Id))
           .then((invalidation) => console.info(`invalidation status: ${invalidation.Status}`))
-      } else {
-        deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
       }
+      deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
 
       logger.info('updating site')
       site = await Sites.trackDeployment(site, deployment)
       return { site, deployment }
     } catch (err) {
+      deployment = await db.put('deployments', { ...deployment, state: 'failed' })
       site = await Sites.trackDeploymentFailed(site, err.message)
       throw err
     }

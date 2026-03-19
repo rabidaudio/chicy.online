@@ -156,11 +156,10 @@ module.exports = {
     // add the config to kvs
     const keys = [`config/${getSiteDomain(site.siteId)}`]
     if (site.customDomain) keys.push(`config/${site.customDomain}`)
-    let { headers, errorPages, rewriteRules } = deployment.config || {}
+    let { headers, rewriteRules } = deployment.config || {}
     headers ||= {}
-    errorPages ||= {}
-    rewriteRules ||= {}
-    await cfront.writeConfig(keys, { headers, errorPages, rewriteRules })
+    rewriteRules ||= []
+    await cfront.writeConfig(keys, { headers, rewriteRules })
 
     return await db.put('sites', {
       ...site,

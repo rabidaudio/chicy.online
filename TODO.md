@@ -14,6 +14,7 @@
   - rename sites
   - user caps
   - cleanup timer task
+  - sns topic for tracking deployment state
 - frontend
 - Custom deployments
   - solution for env vars in cli - esbuild

@@ -22,25 +22,40 @@ if (CLOUDFORMATION) {
   }
 }
 
+// rewriteRules are an array of objects with
+// `match` (string regex to apply the rule) if matching,
+// `flags` (string of optional flags to add to the matcher, e.g. "g". Defaults to ""),
+// `replace` (string replace with ${1} replacements for capture groups of match),
+// and `last` (optional boolean to stop processing after rule is matched, default false).
+// This schema is loosely based on Apache's mod_rewrite
 function createPathRewriter (config) {
-  var matchers = Object.entries(config.rewriteRules || {}).map(function (entry) {
-    return [new RegExp(entry[0]), entry[1]]
+  var matchers = (config.rewriteRules || []).map(function (entry) {
+    return {
+      match: new RegExp(entry.match, entry.flags || ""),
+      replace: entry.replace,
+      last: !!entry.last
+    }
   })
 
   return function (path) {
     for (var i = 0; i < matchers.length; i++) {
-      var matcher = matchers[i][0]
-      var replacement = matchers[i][1]
-      var matches = path.match(matcher)
+      var matcher = matchers[i]
+      var matches = path.match(matcher.match)
+      console.log(`match step ${matcher.match.toString()} -> '${matcher.replace}' last=${matcher.last} path '${path}' matches ${JSON.stringify(matches)}`)
       if (!matches) continue
-      path = replacement
+      path = matcher.replace
       for (var j = 0; j < matches.length; j++) {
-        path = path.replaceAll('${' + j.toString() + '}', matches[j])
+        var tag = '${' + j.toString() + '}'
+        console.log(`replace ${j}: '${tag}' with '${matches[j]}'`)
+        path = path.replaceAll(tag, matches[j])
       }
+      if (matcher.last) break
     }
+    // uri must start with a "/" if changed
     if (path.length > 0 && !path.match(/^\//)) {
       path = "/" + path
     }
+    console.log(`final '${path}'`)
     return path
   }
 }
