@@ -90,7 +90,7 @@ module.exports = {
       logger.info(`cloning repository ${siteId}`)
       await repo.clone()
       logger.info('deleting existing files')
-      await repo.clearWorkingDirectory({ skipClean: config.skipClean || [] })
+      await repo.clearWorkingDirectory({ retain: config.retain || [] })
     }
 
     logger.info('downloading tarball')
@@ -211,8 +211,8 @@ class Repo {
     await this.git.checkout(tag)
   }
 
-  async clearWorkingDirectory ({ skipClean }) {
-    const files = await allFilesRelative(this.cwd, { exclude: ['.git/**', ...skipClean] })
+  async clearWorkingDirectory ({ retain }) {
+    const files = await allFilesRelative(this.cwd, { exclude: ['.git/**', ...retain] })
     logger.verbose('git: git rm -r .')
     await this.git.rm(files)
   }

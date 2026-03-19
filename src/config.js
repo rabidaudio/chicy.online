@@ -37,11 +37,11 @@ const generateCommonConfig = () => sanitize({
 
 const sanitize = (config) => {
   let {
-    exclude, skipClean, errorPages,
+    exclude, retain, errorPages,
     accessControlAllowOrigin, rewriteRules
   } = config
   exclude = sanitizeStringArray('exclude', exclude)
-  skipClean = sanitizeStringArray('exclude', skipClean)
+  retain = sanitizeStringArray('exclude', retain)
   errorPages ||= {}
   for (const [key, val] of Object.entries(errorPages)) {
     if (!key.match(/([0-9]{3}|[0-9]{3}-[0-9]{3})/)) { throw new ConfigValidationError(`Expected config \`errorPages\` keys to be status code ranges but found \`${key}\``) }
@@ -55,7 +55,7 @@ const sanitize = (config) => {
   }
   return {
     exclude,
-    skipClean,
+    retain,
     errorPages,
     accessControlAllowOrigin
   }
