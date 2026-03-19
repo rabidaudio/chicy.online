@@ -3,6 +3,8 @@ const { hideBin } = require('yargs/helpers')
 const prompts = require('@inquirer/prompts')
 const chalk = require('chalk')
 
+const Config = require('../config')
+
 const { Api } = require('./api')
 const {
   isInteractive,
@@ -190,13 +192,13 @@ module.exports = async function main (inArgv = process.argv) {
     .option('verbose', { alias: 'v', describe: 'verbose logging' })
     .option('config', {
       alias: 'c',
-      describe: 'Path to a `.chicy.json` config file to use. ',
+      describe: `Path to a "${Config.CONFIG_NAME}" config file to use.`,
       normalize: true
     })
     .default('config', () => {
       if (process.env.SC_CONFIG) return process.env.SC_CONFIG
       return null
-    }, '$SC_CONFIG or .chicy.json')
+    }, `$SC_CONFIG or ${Config.CONFIG_NAME}`)
     .demandCommand(1, 1, 'command required')
     .strictCommands()
     .middleware(async (argv) => {
@@ -209,12 +211,12 @@ module.exports = async function main (inArgv = process.argv) {
       argv.deployKey = process.env.SC_DEPLOY_KEY
 
       const configPath = argv.config
-      const loadedConfig = await require('../config').findConfig(configPath)
+      const loadedConfig = await Config.findConfig(configPath)
       if (configPath && !loadedConfig) {
         console.error(chalk.red("Couldn't find config file at ") + chalk.dim(configPath))
         process.exit(1)
       }
-      argv.config = loadedConfig || require('../config').generateDefaultConfig()
+      argv.config = loadedConfig || Config.generateDefaultConfig()
       logger.verbose(`using config from ${configPath || 'default location'}`, argv.config)
     })
 

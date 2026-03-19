@@ -4,8 +4,7 @@ const { expect } = require('chai')
 const { runTests } = require('./utils')
 
 const {
-  createPathRewriter, createErrorMatcher,
-  kvsHandle, handler
+  createPathRewriter, kvsHandle, handler
 } = require('../dist/edge_handler.testable')
 
 function testRewriter () {
@@ -42,23 +41,6 @@ function testRewriter2 () {
   expect(rewrite('/page.html')).to.equal('/page.html')
   expect(rewrite('/a/page.html')).to.equal('/a/page.html')
   expect(rewrite('/images/peach.jpg')).to.equal('/images/peach.jpg')
-}
-
-function testErrorMatcher () {
-  const errorPage = createErrorMatcher({
-    errorPages: {
-      404: '404.html',
-      '500-599': '/errors/500.html'
-    }
-  })
-  expect(errorPage(200)).to.equal(null)
-  expect(errorPage(400)).to.equal(null)
-  expect(errorPage(404)).to.equal('/404.html')
-  expect(errorPage(405)).to.equal(null)
-  expect(errorPage(500)).to.equal('/errors/500.html')
-  expect(errorPage(555)).to.equal('/errors/500.html')
-  expect(errorPage(599)).to.equal('/errors/500.html')
-  expect(errorPage(600)).to.equal(null)
 }
 
 async function testHandler () {
@@ -107,7 +89,7 @@ async function testHandler () {
   })
   expect(request.uri).to.equal('/root/images/fruit.jpg')
 
-  let response = await handler({
+  const response = await handler({
     context: {
       eventType: 'viewer-response'
     },
@@ -127,48 +109,6 @@ async function testHandler () {
 
   expect(response.statusCode).to.equal(200)
   expect(response.headers['access-control-allow-origin'].value).to.equal('*')
-
-  response = await handler({
-    context: {
-      eventType: 'viewer-response'
-    },
-    request: {
-      method: 'GET',
-      uri: '/not_found.png',
-      headers: {
-        accept: { value: 'image/png' },
-        host: { value: 'example.com' }
-      }
-    },
-    response: {
-      statusCode: 404,
-      statusDescription: 'Not Found',
-      headers: {}
-    }
-  })
-  expect(response.statusCode).to.equal(404)
-
-  response = await handler({
-    context: {
-      eventType: 'viewer-response'
-    },
-    request: {
-      method: 'GET',
-      uri: '/old_page.html',
-      headers: {
-        accept: { value: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
-        host: { value: 'example.com' }
-      }
-    },
-    response: {
-      statusCode: 404,
-      statusDescription: 'Not Found',
-      headers: {}
-    }
-  })
-  expect(response.statusCode).to.equal(302)
-  expect(response.statusDescription).to.equal('Found')
-  expect(response.headers.location.value).to.equal('/errors/404.html')
 }
 
-runTests(testRewriter, testRewriter2, testErrorMatcher, testHandler)
+runTests(testRewriter, testRewriter2, testHandler)

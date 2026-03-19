@@ -11,7 +11,8 @@ function buildCli () {
       'process.env.BIN_NAME': '\'statchic\'',
       'process.env.APP_NAME': '\'static-chic.online\'',
       'process.env.API_HOST': '\'https://api.static-chic.online\'',
-      'process.env.SITE_DOMAIN': '\'sites.static-chic.online\''
+      'process.env.SITE_DOMAIN': '\'sites.static-chic.online\'',
+      'process.env.CONFIG_NAME': '\'.chicy.json\''
     },
     minify: true,
     platform: 'node',

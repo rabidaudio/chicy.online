@@ -2,7 +2,7 @@ const { existsSync } = require('node:fs')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 
-const CONFIG_NAME = '.chicy.json'
+const CONFIG_NAME = process.env.CONFIG_NAME || '.chicy.json'
 
 class ConfigValidationError extends Error {}
 
@@ -24,9 +24,6 @@ const generateDefaultConfig = () => sanitize({})
 
 const generateCommonConfig = () => sanitize({
   headers: {},
-  errorPages: {
-    404: '404.html'
-  },
   rewriteRules: {
     /* eslint-disable-next-line no-template-curly-in-string */
     '^(.*)/$': '${1}/index.html',
@@ -36,7 +33,7 @@ const generateCommonConfig = () => sanitize({
 })
 
 const sanitize = (config) => {
-  let { exclude, retain, headers, errorPages, rewriteRules } = config
+  let { exclude, retain, headers, rewriteRules } = config
   exclude = sanitizeStringArray('exclude', exclude)
   retain = sanitizeStringArray('exclude', retain)
   headers ||= {}
@@ -44,11 +41,11 @@ const sanitize = (config) => {
     if (typeof key !== 'string') { throw new ConfigValidationError(`Expected config \`errorPages\` to have string keys but found \`${key}\``) }
     if (typeof val !== 'string') { throw new ConfigValidationError(`Expected config \`errorPages.${key}\` to be a string but found \`${val}\``) }
   }
-  errorPages ||= {}
-  for (const [key, val] of Object.entries(errorPages)) {
-    if (!key.match(/([0-9]{3}|[0-9]{3}-[0-9]{3})/)) { throw new ConfigValidationError(`Expected config \`errorPages\` keys to be status code ranges but found \`${key}\``) }
-    if (typeof val !== 'string') { throw new ConfigValidationError(`Expected config \`errorPages.${key}\` to be a string but found \`${val}\``) }
-  }
+  // errorPages ||= {}
+  // for (const [key, val] of Object.entries(errorPages)) {
+  //   if (!key.match(/([0-9]{3}|[0-9]{3}-[0-9]{3})/)) { throw new ConfigValidationError(`Expected config \`errorPages\` keys to be status code ranges but found \`${key}\``) }
+  //   if (typeof val !== 'string') { throw new ConfigValidationError(`Expected config \`errorPages.${key}\` to be a string but found \`${val}\``) }
+  // }
   rewriteRules ||= {}
   for (const [key, val] of Object.entries(rewriteRules)) {
     try { RegExp.call(key) } catch (err) { throw new ConfigValidationError('Invalid regex in `rewriteRules`', { cause: err }) }
@@ -59,7 +56,6 @@ const sanitize = (config) => {
     exclude,
     retain,
     headers,
-    errorPages,
     rewriteRules
   }
 }
@@ -92,6 +88,8 @@ const saveCommonConfig = async (dir = process.cwd()) => {
 }
 
 module.exports = {
+  CONFIG_NAME,
+  ConfigValidationError,
   findConfig,
   generateDefaultConfig,
   saveCommonConfig

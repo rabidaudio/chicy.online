@@ -45,35 +45,6 @@ function createPathRewriter (config) {
   }
 }
 
-function createErrorMatcher (config) {
-  var matchers = []
-  var entries = Object.entries(config.errorPages || {})
-  for (var i = 0; i < entries.length; i++) {
-    var key = entries[i][0]
-    var value = entries[i][1]
-    if (!value.match(/^\//)) {
-      value = "/" + value
-    }
-    if (key.match(/^[0-9]+$/)) {
-      var s = parseInt(key, 10)
-      matchers.push({ start: s, end: s, errorPage: value })
-    } else if (key.match(/^[0-9]+-[0-9]+$/)) {
-      var bounds = key.split('-', 2).map(function (k) { return parseInt(k, 10) })
-      matchers.push({ start: bounds[0], end: bounds[1], errorPage: value })
-    }
-  }
-
-  return function (code) {
-    for (var i = 0; i < matchers.length; i++) {
-      var matcher = matchers[i]
-      if (code >= matcher.start && code <= matcher.end) {
-        return matcher.errorPage
-      }
-    }
-    return null
-  }
-}
-
 async function handler (event) {
   var request = event.request
   var response = event.response
@@ -95,18 +66,6 @@ async function handler (event) {
     request.uri = rewrite(request.uri)
     return request
   } else if (event.context.eventType === 'viewer-response') {
-    // handle error pages
-    var accept = (request.headers['accept'] && request.headers['accept'].value) || ''
-    if (request.method === 'GET' && response.statusCode >= 400 && accept.match(/text\/html/)) {
-      var findErrorPage = createErrorMatcher(config)
-      var errorPage = findErrorPage(response.statusCode)
-      if (errorPage) {
-        response.statusCode = 302
-        response.statusDescription = 'Found'
-        response.headers.location = { value: errorPage }
-      }
-    }
-
     // handle custom headers
     var entries = Object.entries(config.headers || {})
     for (var i = 0; i < entries.length; i++) {
@@ -120,5 +79,5 @@ async function handler (event) {
 }
 
 if (!CLOUDFORMATION) {
-  module.exports = { createPathRewriter, createErrorMatcher, handler, kvsHandle }
+  module.exports = { createPathRewriter, handler, kvsHandle }
 }
