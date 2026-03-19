@@ -38,6 +38,9 @@ function createPathRewriter (config) {
         path = path.replaceAll('${' + j.toString() + '}', matches[j])
       }
     }
+    if (path.length > 0 && !path.match(/^\//)) {
+      path = "/" + path
+    }
     return path
   }
 }
@@ -93,11 +96,10 @@ async function handler (event) {
     return request
   } else if (event.context.eventType === 'viewer-response') {
     // handle error pages
-    var accept = (request.headers.accept && request.headers.accept.value) || ''
+    var accept = (request.headers['accept'] && request.headers['accept'].value) || ''
     if (request.method === 'GET' && response.statusCode >= 400 && accept.match(/text\/html/)) {
       var findErrorPage = createErrorMatcher(config)
       var errorPage = findErrorPage(response.statusCode)
-      console.log(`errorPage ${response.statusCode} ${errorPage}`)
       if (errorPage) {
         response.statusCode = 302
         response.statusDescription = 'Found'

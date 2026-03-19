@@ -1,6 +1,6 @@
 {
-  "exclude": [],
-  "retain": [],
+  "exclude": ["resources/**"],
+  "retain": ["resources/**"],
   "headers": {
     "Access-Control-Allow-Origin": "*"
   },
@@ -8,6 +8,7 @@
     "404": "/404.html"
   },
   "rewriteRules": {
+      "^$": "/index.html",
       "^(.*)/$": "${1}/index.html",
       "^(.*)/([^.]+)$": "${1}/${2}/index.html"
   }

@@ -27,6 +27,23 @@ function testRewriter () {
   expect(rewrite('/images/peach.jpg')).to.equal('/root/images/peach.jpg')
 }
 
+function testRewriter2 () {
+  const rewrite = createPathRewriter({
+    /* eslint-disable no-template-curly-in-string */
+    rewriteRules: {
+      '^$': '/index.html', '^(.*)/([^.]+)$': '${1}/${2}/index.html', '^(.*)/$': '${1}/index.html'
+    }
+  })
+
+  expect(rewrite('')).to.equal('/index.html')
+  expect(rewrite('/')).to.equal('/index.html')
+  expect(rewrite('/foo')).to.equal('/foo/index.html')
+  expect(rewrite('/foo/bar/baz')).to.equal('/foo/bar/baz/index.html')
+  expect(rewrite('/page.html')).to.equal('/page.html')
+  expect(rewrite('/a/page.html')).to.equal('/a/page.html')
+  expect(rewrite('/images/peach.jpg')).to.equal('/images/peach.jpg')
+}
+
 function testErrorMatcher () {
   const errorPage = createErrorMatcher({
     errorPages: {
@@ -139,7 +156,7 @@ async function testHandler () {
       method: 'GET',
       uri: '/old_page.html',
       headers: {
-        accept: { value: 'text/html' },
+        accept: { value: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
         host: { value: 'example.com' }
       }
     },
@@ -154,4 +171,4 @@ async function testHandler () {
   expect(response.headers.location.value).to.equal('/errors/404.html')
 }
 
-runTests(testRewriter, testErrorMatcher, testHandler)
+runTests(testRewriter, testRewriter2, testErrorMatcher, testHandler)

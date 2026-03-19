@@ -172,8 +172,11 @@ module.exports = {
     }
 
     try {
-      site = await Sites.prepareDistribution(site)
-      await Files.promote({ siteId, deploymentId })
+      // run in parallel
+      [site] = await Promise.all([
+        Sites.prepareDistribution(site, deployment),
+        Files.promote({ siteId, deploymentId })
+      ])
 
       if (site.currentDeployment) {
         logger.info('invalidating cache')
@@ -187,10 +190,6 @@ module.exports = {
       } else {
         deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
       }
-      logger.info('waiting for distribution')
-      await until(({ tenant }) => tenant.Status !== 'InProgress')
-        .poll(() => cfront.getTenant(site.tenantId))
-        .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
 
       logger.info('updating site')
       site = await Sites.trackDeployment(site, deployment)

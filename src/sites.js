@@ -5,6 +5,8 @@ const namor = require('namor')
 const logger = require('./logger').getLogger()
 
 const { generateDeployKey, obfuscateDeployKey } = require('./auth/deploy_keys')
+const { until } = require('./poll')
+
 const cfront = require('./cfront')
 const db = require('./db')
 const git = require('./files')
@@ -127,12 +129,20 @@ module.exports = {
   prepareDistribution: async (site) => {
     if (site.tenantId) return site
 
+    // create the distribution
     logger.info('creating distro tenant')
     const { siteId, customDomain } = site
     const baseDomain = getSiteDomain(siteId)
     const { tenant, etag } = await cfront.createTenant({ siteId, customDomain, baseDomain })
     logger.verbose('tenant distro created', tenant)
-    return await db.put('sites', { ...site, tenantId: tenant.Id, etag })
+    site = await db.put('sites', { ...site, tenantId: tenant.Id, etag })
+
+    logger.info('waiting for distribution')
+    await until(({ tenant }) => tenant.Status !== 'InProgress')
+      .poll(() => cfront.getTenant(site.tenantId))
+      .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
+
+    return site
   },
 
   trackDeploymentInProgress: async (site) => {
@@ -143,6 +153,15 @@ module.exports = {
   },
 
   trackDeployment: async (site, deployment) => {
+    // add the config to kvs
+    const keys = [`config/${getSiteDomain(site.siteId)}`]
+    if (site.customDomain) keys.push(`config/${site.customDomain}`)
+    let { headers, errorPages, rewriteRules } = deployment.config || {}
+    headers ||= {}
+    errorPages ||= {}
+    rewriteRules ||= {}
+    await cfront.writeConfig(keys, { headers, errorPages, rewriteRules })
+
     return await db.put('sites', {
       ...site,
       currentDeployment: deployment.deploymentId,
@@ -169,7 +188,7 @@ module.exports = {
 
   delete: async (siteId) => {
     logger.warn(`deleting site ${siteId}`)
-    const { tenantId, etag } = await db.get('sites', { siteId })
+    const { tenantId, etag, customDomain } = await db.get('sites', { siteId })
 
     // delete resources
     if (tenantId) {
@@ -196,6 +215,10 @@ module.exports = {
       await db.delete('deployments', { siteId, deploymentId })
     }
     logger.info(`[${siteId}] deleted deployment history`)
+
+    const keys = [`config/${getSiteDomain(siteId)}`]
+    if (customDomain) keys.push(`config/${customDomain}`)
+    await cfront.deleteConfig(keys)
 
     // delete site from db
     await db.delete('sites', { siteId })
