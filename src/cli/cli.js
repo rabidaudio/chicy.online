@@ -123,7 +123,8 @@ module.exports = async function main (inArgv = process.argv) {
         .option('message', { alias: 'm', describe: 'an optional description of the deployment' })
         .option('exclude', {
           alias: 'x',
-          describe: 'a glob of files relative to `path` to exclude from the deployment',
+          describe: 'a glob of files relative to `path` to exclude from the deployment. ' +
+            'These are in addition to any defined in the config file.',
           type: 'array',
           default: []
         })
@@ -187,9 +188,18 @@ module.exports = async function main (inArgv = process.argv) {
     .command('help', false, (y) => y, (argv) => { cli.showHelp() })
     .alias('help', 'h')
     .option('verbose', { alias: 'v', describe: 'verbose logging' })
+    .option('config', {
+      alias: 'c',
+      describe: 'Path to a `.chicy.json` config file to use. ',
+      normalize: true
+    })
+    .default('config', () => {
+      if (process.env.SC_CONFIG) return process.env.SC_CONFIG
+      return null
+    }, '$SC_CONFIG or .chicy.json')
     .demandCommand(1, 1, 'command required')
     .strictCommands()
-    .middleware((argv) => {
+    .middleware(async (argv) => {
       // We do this here because we need to figure out verobsity level before importing logger and any
       // dependencies that expect it
       logger = require('../logger').configure({ level: argv.verbose ? 'verbose' : 'warn', pretty: true }).getLogger()
@@ -197,6 +207,15 @@ module.exports = async function main (inArgv = process.argv) {
       argv.logger = logger
       argv.api = new Api(process.env.SC_HOSTNAME || API_HOST, logger)
       argv.deployKey = process.env.SC_DEPLOY_KEY
+
+      const configPath = argv.config
+      const loadedConfig = await require('../config').findConfig(configPath)
+      if (configPath && !loadedConfig) {
+        console.error(chalk.red("Couldn't find config file at ") + chalk.dim(configPath))
+        process.exit(1)
+      }
+      argv.config = loadedConfig || require('../config').generateDefaultConfig()
+      logger.verbose(`using config from ${configPath || 'default location'}`, argv.config)
     })
 
   cli.wrap(Math.min(cli.terminalWidth(), 120))

@@ -262,8 +262,8 @@ router.get('/sites/:siteId/deployments', requireUserAuthOrDeployKey, findSite, a
 
 router.post('/sites/:siteId/deployments', requireUserAuthOrDeployKey, findSite, async (ctx) => {
   const site = ctx.site
-  const { message } = ctx.request.body // optional
-  const deployment = await Deployments.create({ site, message })
+  const { message, config } = ctx.request.body
+  const deployment = await Deployments.create({ site, message, config })
   ctx.status = 201 // created
   ctx.body = { status: 'OK', data: deployment }
 })

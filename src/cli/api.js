@@ -111,10 +111,10 @@ class Api {
     return data
   }
 
-  async deploy ({ siteId, message }) {
+  async deploy ({ siteId, message, config }) {
     const { data } = await this.fetch(`/sites/${siteId}/deployments`, {
       method: 'POST',
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, config }),
       headers: {
         'Content-Type': 'application/json'
       }

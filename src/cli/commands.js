@@ -9,11 +9,20 @@ const ora = require('ora').default
 const { ApiError } = require('./api')
 const { getDb } = require('./local_storage')
 const { isInteractive, getSiteDomain, relativeTime, showTable } = require('./utils')
+const { saveCommonConfig } = require('../config')
 
 async function init (argv) {
   const { name } = argv
   if (isInteractive) console.log(chalk.blue('Creating new site'))
   const { siteId, deployKey } = await argv.api.createSite({ name })
+
+  const configPath = await saveCommonConfig()
+  if (configPath) {
+    console.log(chalk.yellow('Created a config file at ') + chalk.dim(configPath) +
+      chalk.yellow(' with some sensible defaults. Use this to configure the deployment settings of your site.'))
+  } else if (isInteractive) {
+    console.log(chalk.yellow('Skipped creating a config file as one already exists.'))
+  }
 
   if (isInteractive) {
     console.log(chalk.green('Site created: ') + chalk.bold(getSiteDomain(siteId)))
@@ -130,12 +139,13 @@ async function showDeployments (argv) {
 }
 
 async function deploy (argv) {
-  const { message, exclude, dryRun } = argv
+  const { message, exclude, dryRun, config } = argv
   if (isInteractive) console.log(chalk.blue('Deploying to site ') + chalk.bold(argv.site))
   argv.spinner ||= ora()
 
+  const allExcludes = [...exclude, ...(config.exclude)]
   if (dryRun) {
-    const files = await require('../files').allFilesRelative(argv.path, { exclude })
+    const files = await require('../files').allFilesRelative(argv.path, { exclude: allExcludes })
     let size = 0
     for (const file of files) {
       const s = await stat(path.join(argv.path, file))
@@ -148,9 +158,11 @@ async function deploy (argv) {
 
   argv.spinner.text = 'Creating...'
   argv.spinner.start()
-  const { deploymentId, siteId, uploadPath, credentials } = await argv.api.deploy({ siteId: argv.site, message })
+  const {
+    deploymentId, siteId, uploadPath, credentials
+  } = await argv.api.deploy({ siteId: argv.site, message, config })
   argv.spinner.text = 'Uploading...'
-  const tarball = await require('../files').createTarball(argv.path, { exclude })
+  const tarball = await require('../files').createTarball(argv.path, { exclude: allExcludes })
   await require('../s3').upload(uploadPath, tarball, {
     credentials,
     progress: ({ loaded }) => { argv.spinner.text = `Uploading... ${prettyBytes(loaded)}` }

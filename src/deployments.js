@@ -23,10 +23,10 @@ const generateDeploymentId = () => {
 
 const sanitize = (deployment) => {
   const {
-    deploymentId, siteId, message, createdAt, state, credentials, isLive
+    deploymentId, siteId, message, createdAt, state, credentials, isLive, config
     // exclude: commitSha, invalidationId,
   } = deployment
-  const data = { deploymentId, siteId, message, createdAt, state, isLive }
+  const data = { deploymentId, siteId, message, createdAt, state, isLive, config }
   if (state === 'pending') {
     data.uploadPath = Files.getDeploymentTarballPath(siteId, deploymentId)
     data.credentials = credentials
@@ -48,7 +48,7 @@ module.exports = {
   // newer deployments are alphabetically after older ones.
   // NOTE: this does not update the content on the site.
   // For that, call promoteDeployment.
-  create: async ({ site, message }) => {
+  create: async ({ site, message, config }) => {
     const { siteId } = site
     const deploymentId = generateDeploymentId()
 
@@ -64,6 +64,7 @@ module.exports = {
       siteId,
       message,
       state: 'pending', // 'ready', 'deployed'
+      config,
       createdAt
     })
     return sanitize({ ...deployment, credentials })
@@ -90,7 +91,11 @@ module.exports = {
 
     try {
       const commitSha = await Files.deploy({
-        siteId, deploymentId, tarballPath, isFirst: !site.gitInitialized
+        siteId,
+        deploymentId,
+        tarballPath,
+        isFirst: !site.gitInitialized,
+        config: deployment.config || {}
       })
 
       if (!site.gitInitialized) {

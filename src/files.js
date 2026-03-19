@@ -49,6 +49,7 @@ const getOrigin = (siteId) => `s3://${APP_BUCKET}/${getSiteDeploymentsKey(siteId
 
 const allFilesRelative = async (cwd, opts = {}) => {
   return await Array.fromAsync(async function * () {
+    logger.verbose('glob: ["**/*", "**/.*"]', opts)
     for await (const entry of glob(['**/*', '**/.*'], { ...opts, cwd, withFileTypes: true })) {
       if (entry.isFile()) yield path.relative(cwd, path.join(entry.parentPath, entry.name))
     }
@@ -78,7 +79,7 @@ module.exports = {
     return ReadableStream.from(tar.create({ cwd: directoryPath, gzip: true }, files))
   },
 
-  deploy: async ({ siteId, deploymentId, tarballPath, isFirst }) => {
+  deploy: async ({ siteId, deploymentId, tarballPath, isFirst, config }) => {
     const origin = getOrigin(siteId)
     const repo = new Repo({ origin, deploymentId })
     await repo.prepare()
@@ -89,7 +90,7 @@ module.exports = {
       logger.info(`cloning repository ${siteId}`)
       await repo.clone()
       logger.info('deleting existing files')
-      await repo.clearWorkingDirectory()
+      await repo.clearWorkingDirectory({ skipClean: config.skipClean || [] })
     }
 
     logger.info('downloading tarball')
@@ -210,8 +211,8 @@ class Repo {
     await this.git.checkout(tag)
   }
 
-  async clearWorkingDirectory () {
-    const files = await allFilesRelative(this.cwd, { exclude: ['.git/**'] })
+  async clearWorkingDirectory ({ skipClean }) {
+    const files = await allFilesRelative(this.cwd, { exclude: ['.git/**', ...skipClean] })
     logger.verbose('git: git rm -r .')
     await this.git.rm(files)
   }
