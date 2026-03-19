@@ -1,0 +1,12 @@
+{
+  "accessControlAllowOrigin": null,
+  "exclude": [],
+  "skipClean": [],
+  "errorPages": {
+    "404": "404.html"
+  },
+  "rewriteRules": {
+      "^(.*)/$": "${1}/index.html",
+      "^(.*)/([^.]+)$": "${1}/${2}/index.html"
+  }
+}

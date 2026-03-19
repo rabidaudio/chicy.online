@@ -36,7 +36,7 @@
     "deploy": "dotenvx run -- serverless deploy",
     "publish": "run-s build deploy",
     "lint": "standard --fix",
-    "test": "node tests/api.test.js",
+    "test": "node tests/index.js",
     "audit": "npm audit --omit dev"
   },
   "dependencies": {

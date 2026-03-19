@@ -14,14 +14,15 @@ const runTests = (...tests) => {
   const chain = async (tests) => {
     const [test, ...rem] = tests
     if (!test) return
-    await test(ctx)
-      .then(() => console.log(chalk.green(test.name)))
-      .catch(err => {
-        console.log(ctx)
-        console.error(chalk.red(test.name))
-        console.error(err)
-        throw err
-      })
+    try {
+      await test(ctx)
+      console.log(chalk.green(test.name))
+    } catch (err) {
+      console.log(ctx)
+      console.error(chalk.red(test.name))
+      console.error(err)
+      throw err
+    }
     await chain(rem)
   }
 
