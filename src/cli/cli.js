@@ -3,6 +3,9 @@ const { hideBin } = require('yargs/helpers')
 const prompts = require('@inquirer/prompts')
 const chalk = require('chalk')
 
+const logManger = require('../logger')
+const logger = logManger.getLogger()
+
 const Config = require('../config')
 
 const { Api } = require('./api')
@@ -17,8 +20,6 @@ const {
   showDeployments, deploy, promote, removeSite,
   authenticateUser, authenticateDeployKeyOrUser
 } = require('./commands')
-
-let logger
 
 // These are injected during esbuild
 const BIN_NAME = process.env.BIN_NAME || 'statchic'
@@ -204,10 +205,9 @@ module.exports = async function main (inArgv = process.argv) {
     .middleware(async (argv) => {
       // We do this here because we need to figure out verobsity level before importing logger and any
       // dependencies that expect it
-      logger = require('../logger').configure({ level: argv.verbose ? 'verbose' : 'warn', pretty: true }).getLogger()
+      logManger.configure({ level: argv.verbose ? 'verbose' : 'warn' })
       logger.verbose('arguments', argv)
-      argv.logger = logger
-      argv.api = new Api(process.env.SC_HOSTNAME || API_HOST, logger)
+      argv.api = new Api(process.env.SC_HOSTNAME || API_HOST)
       argv.deployKey = process.env.SC_DEPLOY_KEY
 
       const configPath = argv.config

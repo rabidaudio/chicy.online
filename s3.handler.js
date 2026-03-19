@@ -1,6 +1,6 @@
 const path = require('node:path')
 
-const logger = require('./src/logger').configure({ level: 'verbose', pretty: false }).getLogger()
+const logger = require('./src/logger').configure({ level: 'verbose' }).getLogger()
 const Deployments = require('./src/deployments')
 
 exports.deployHandler = async (event, _context) => {

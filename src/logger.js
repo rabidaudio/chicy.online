@@ -1,6 +1,6 @@
 const winston = require('winston')
 
-let _logger = null
+const isInteractive = require('is-interactive').default()
 
 const errorFormatter = winston.format((info, _opts) => {
   if (info instanceof Error || info.stack) {
@@ -9,13 +9,13 @@ const errorFormatter = winston.format((info, _opts) => {
   return info
 })
 
-module.exports.configure = ({ level, pretty } = {}) => {
-  const formats = [
-    errorFormatter(),
-    winston.format.simple()
-  ]
-  if (pretty) {
-    formats.unshift(winston.format.colorize({
+let formats = [
+  errorFormatter(),
+  winston.format.simple()
+]
+if (isInteractive) {
+  formats = [
+    winston.format.colorize({
       level: true,
       colors: {
         error: 'bgRed',
@@ -24,22 +24,28 @@ module.exports.configure = ({ level, pretty } = {}) => {
         http: 'gray',
         verbose: 'magenta'
       }
-    }))
-  }
-  _logger = winston.createLogger({
-    levels: winston.config.npm.levels,
-    level,
-    format: winston.format.combine(...formats),
-    transports: [
-      new winston.transports.Console({
-        stderrLevels: ['info', 'http', 'verbose']
-      })
-    ]
-  })
+    }),
+    ...formats
+  ]
+}
+
+const _logger = winston.createLogger({
+  levels: winston.config.npm.levels,
+  format: winston.format.combine(...formats),
+  level: 'warn',
+  transports: []
+})
+
+module.exports.configure = ({ level } = {}) => {
+  _logger.level = level
+  _logger.add(
+    new winston.transports.Console({
+      stderrLevels: ['info', 'http', 'verbose']
+    })
+  )
   return this
 }
 
 module.exports.getLogger = () => {
-  if (!_logger) throw new Error('must `configure` the logger before use')
   return _logger
 }

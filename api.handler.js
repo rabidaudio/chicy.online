@@ -1,6 +1,6 @@
 const serverless = require('serverless-http')
 
-require('./src/logger').configure({ level: 'verbose', pretty: false })
+require('./src/logger').configure({ level: 'verbose' })
 
 const { app } = require('./src/server')
 

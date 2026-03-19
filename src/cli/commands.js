@@ -6,10 +6,15 @@ const prettyBytes = require('pretty-bytes').default
 const prompts = require('@inquirer/prompts')
 const ora = require('ora').default
 
+const logger = require('../logger').getLogger()
+
 const { ApiError } = require('./api')
 const { getDb } = require('./local_storage')
 const { isInteractive, getSiteDomain, relativeTime, showTable } = require('./utils')
 const { saveCommonConfig } = require('../config')
+const { verifyCustomDomain, DomainValidationFailedError } = require('../sites')
+const Files = require('../files')
+const s3 = require('../s3')
 
 async function init (argv) {
   const { name } = argv
@@ -145,7 +150,7 @@ async function deploy (argv) {
 
   const allExcludes = [...exclude, ...(config.exclude)]
   if (dryRun) {
-    const files = await require('../files').allFilesRelative(argv.path, { exclude: allExcludes })
+    const files = await Files.allFilesRelative(argv.path, { exclude: allExcludes })
     let size = 0
     for (const file of files) {
       const s = await stat(path.join(argv.path, file))
@@ -162,8 +167,8 @@ async function deploy (argv) {
     deploymentId, siteId, uploadPath, credentials
   } = await argv.api.deploy({ siteId: argv.site, message, config })
   argv.spinner.text = 'Uploading...'
-  const tarball = await require('../files').createTarball(argv.path, { exclude: allExcludes })
-  await require('../s3').upload(uploadPath, tarball, {
+  const tarball = await Files.createTarball(argv.path, { exclude: allExcludes })
+  await s3.upload(uploadPath, tarball, {
     credentials,
     progress: ({ loaded }) => { argv.spinner.text = `Uploading... ${prettyBytes(loaded)}` }
   })
@@ -229,10 +234,10 @@ async function removeSite (argv) {
 }
 
 const authenticateUser = async (argv, next) => {
-  argv.logger.verbose('check for token in local storage')
+  logger.verbose('check for token in local storage')
   const db = await getDb()
   if (db.data.userToken) {
-    argv.logger.verbose('verify token')
+    logger.verbose('verify token')
     argv.api.authenticateUserToken(db.data.userToken)
     const { isLoggedIn, res } = await argv.api.status()
     if (isLoggedIn) {
@@ -256,7 +261,7 @@ const authenticateUser = async (argv, next) => {
 
     const { state, userToken } = await argv.api.checkSignup({ authReqId })
     if (state === 'authorized') {
-      argv.logger.verbose('saving token')
+      logger.verbose('saving token')
       await db.update((data) => { data.userToken = userToken }) // save token
       argv.api.authenticateUserToken(userToken)
       return await next()

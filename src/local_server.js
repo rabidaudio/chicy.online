@@ -1,6 +1,6 @@
 require('@dotenvx/dotenvx').config({ quiet: true })
 
-require('./logger').configure({ level: 'verbose', pretty: false })
+require('./logger').configure({ level: 'verbose' })
 
 const port = process.env.PORT || 4000
 process.env.HOST = `http://localhost:${port}`

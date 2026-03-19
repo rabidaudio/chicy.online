@@ -1,5 +1,7 @@
 const { until } = require('../poll')
 
+const logger = require('../logger').getLogger()
+
 class ApiError extends Error {
   constructor (data, opts = {}) {
     super(data.message, opts)
@@ -8,16 +10,15 @@ class ApiError extends Error {
 }
 
 class Api {
-  constructor (hostname, logger) {
+  constructor (hostname) {
     this.hostname = hostname
     this.headers = {
       Accept: 'application/json'
     }
-    this.logger = logger
   }
 
   async fetch (path, opts = {}) {
-    this.logger.http(`${opts.method || 'GET'} ${path}`)
+    logger.http(`${opts.method || 'GET'} ${path}`)
     const optsHeaders = opts.headers || {}
     const args = { ...opts, headers: { ...this.headers, ...optsHeaders } }
     const res = await global.fetch(`${this.hostname}${path}`, args)
@@ -31,7 +32,7 @@ class Api {
     }
     if (res.headers.get('content-type').match(/^application\/json/)) {
       const { data } = await res.json()
-      this.logger.http('response', data)
+      logger.http('response', data)
       return { res, data }
     }
     return { res }
@@ -101,7 +102,7 @@ class Api {
       }
     })
     if (res.status === 202) {
-      this.logger.warn('Nothing changed.')
+      logger.warn('Nothing changed.')
     }
     return data
   }
@@ -142,7 +143,7 @@ class Api {
       method: 'POST'
     })
     if (res.status === 202) {
-      this.logger.warn('Nothing changed.')
+      logger.warn('Nothing changed.')
     }
     return data
   }
