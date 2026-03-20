@@ -1,25 +1,26 @@
 # TODO
 
 - figure out why rewrites are broken again
-- change name and domain
 - production deploy
-  - custom domain table, site has_many
+  - change name and domain
   - refactor state machines to be a lot more explicit and well defined
     - rename site ready to unpublished
   - rename currentDeployment to currentDeploymentId
-  - callback url
-  - cli env var configuration
-  - https://github.com/settings/apps/static-chic-online
+  - callback url: https://github.com/settings/apps/static-chic-online
 - new features
-  - json vs text outputs from cli
+  - rename sites
+  - user caps
   - error pages
     - https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/creating-custom-error-pages.html
     - allowed codes: 400, 403, 404, 405, 414, 416, 500, 501, 502, 503, 504
   - rollback -n 1
-  - rename sites
-  - user caps
+  - anon auth provider (for custom deployments, etc)
+    - generates random user id and auth token that never changes. or password?
+  - json vs text outputs from cli
   - cleanup timer task
-  - sns topic for tracking deployment state
+  - sns topic for tracking deployment/promotion logs
+  - multiple custom domains
+    - array on site, since limit is 4
 - frontend
 - Custom deployments
   - flag for controlling enabled auth providers

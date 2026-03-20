@@ -109,6 +109,10 @@ async function configure (argv) {
     // now poll until certificate is issued and attached
     await argv.api.waitForDomain({ siteId: argv.site })
     if (isInteractive) argv.spinner.succeed('Certificate attached')
+  } else if (site.domainState !== 'pending_deploy' && site.domainState !== 'attached' &&
+      site.domainState !== 'cleared') {
+    console.error(chalk.red('An unexpected error occurred.'))
+    process.exit(500)``
   }
 
   if (isInteractive) {

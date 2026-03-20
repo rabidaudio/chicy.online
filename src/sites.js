@@ -184,6 +184,11 @@ const setCustomDomain = async (site, newCustomDomain) => {
   } else {
     const res = await cfront.setCustomDomain({ tenantId, etag, baseDomain, customDomain: newCustomDomain })
     site = await db.put('sites', { ...site, etag: res.etag, customDomain: newCustomDomain, domainAttached: false })
+
+    // try attaching once to see if the cert is already available
+    const attachRes = await attachDomain(site)
+    site = attachRes.site
+    if (attachRes.state === 'attached') return response('attached')
     return response('pending_set')
   }
 }
