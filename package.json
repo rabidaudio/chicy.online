@@ -1,5 +1,5 @@
 {
-  "name": "static-chic.online",
+  "name": "chicy.online",
   "version": "0.1.0",
   "description": "Easy and cheap static site hosting on AWS",
   "keywords": [
@@ -7,20 +7,20 @@
     "hosting",
     "cli"
   ],
-  "homepage": "https://github.com/rabidaudio/static-chic.online#readme",
+  "homepage": "https://github.com/rabidaudio/chicy.online#readme",
   "bugs": {
-    "url": "https://github.com/rabidaudio/static-chic.online/issues"
+    "url": "https://github.com/rabidaudio/chicy.online/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rabidaudio/static-chic.online.git"
+    "url": "git+https://github.com/rabidaudio/chicy.online.git"
   },
   "license": "MIT",
   "author": "Julien Dorothy, julien@rabidaudio.com",
   "type": "commonjs",
   "main": "dist/cli.js",
   "bin": {
-    "statchic": "bin/cli"
+    "chicy": "bin/cli"
   },
   "directories": {
     "test": "tests"
