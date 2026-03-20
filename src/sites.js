@@ -259,10 +259,11 @@ const waitForDistribution = async (site, opts = {}) => {
 }
 
 const trackDeploymentInProgress = async (site) => {
-  return await db.put('sites', {
+  site = await db.put('sites', {
     ...site,
     state: 'deploying'
   })
+  return sanitize(site)
 }
 
 const trackDeploymentComplete = async (site, deployment) => {

@@ -3,8 +3,6 @@
 - figure out why rewrites are broken again
 - refactor state machines to be a lot more explicit and well defined
   - rename site ready to unpublished
-- production deploy
-  - callback url: https://github.com/settings/apps/static-chic-online
 - new features
   - rename sites
   - user caps
