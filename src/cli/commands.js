@@ -283,6 +283,8 @@ async function promote (argv) {
 async function removeSite (argv) {
   if (isInteractive) {
     console.log(chalk.blue('Deleting site ') + chalk.bold(argv.site) + chalk.blue(' ...'))
+  }
+  if (!argv.skipConfirm) {
     console.warn(chalk.red('This will permanently remove the site ') + chalk.bold(argv.site) +
       chalk.red(' and all data.'))
     const siteId = await prompts.input({

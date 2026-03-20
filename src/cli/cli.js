@@ -152,7 +152,7 @@ module.exports = async function main (inArgv = process.argv) {
       y.example('promote --wait --site teeny-angle-dwas5 0000019cd5515615dd304c19')
         .siteOption()
         .positional('deployment', {
-          describe: 'The ID of the deployment to promote, e.g. ' + chalk.bold('d_0000019cd5515615dd304c19') + '.'
+          describe: 'the ID of the deployment to promote, e.g. ' + chalk.bold('d_0000019cd5515615dd304c19') + '.'
         }).default('deployment', () => {
           if (process.env.CHICY_DEPLOY_ID) return process.env.CHICY_DEPLOY_ID
         }, '$CHICY_DEPLOY_ID')
@@ -188,7 +188,13 @@ module.exports = async function main (inArgv = process.argv) {
 
     .command('remove', chalk.bold('delete a site.'), y =>
       y.example('remove --site teeny-angle-dwas5')
-        .siteOption(),
+        .siteOption()
+        .option('skip-confirm', {
+          alias: 'y',
+          describe: 'do not ask for confirmation before deleting',
+          type: 'boolean',
+          default: false
+        }),
     cmd()
       .use(authenticateUser)
       .use(requestSite)
@@ -248,15 +254,20 @@ const requestSite = requestOption('site', async (argv) => {
         siteId,
         name,
         customDomain,
+        baseDomain,
         deployedAt,
         createdAt
-      }) => ({
-        name: `${name} [${customDomain || getSiteDomain(siteId)}]`,
-        value: siteId,
-        description: deployedAt
-          ? `last published ${relativeTime(deployedAt)}`
-          : `created ${relativeTime(createdAt)}`
-      }))
+      }) => {
+        let displayName = chalk.bold(siteId) + ' [' + chalk.underline(customDomain || baseDomain) + ']'
+        if (name) displayName = name + ' ' + displayName
+        return {
+          name: displayName,
+          value: siteId,
+          description: deployedAt
+            ? `last published ${relativeTime(deployedAt)}`
+            : `created ${relativeTime(createdAt)}`
+        }
+      })
     })
   }
 })
