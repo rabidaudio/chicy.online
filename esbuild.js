@@ -2,6 +2,27 @@ const yargs = require('yargs')
 const { hideBin } = require('yargs/helpers')
 const esbuild = require('esbuild')
 
+const lambdaEnvironmentSettings = {
+  bundle: true,
+  minify: true,
+  sourcemap: true,
+  platform: 'node',
+  packages: 'external',
+  target: ['node24']
+}
+
+const cloudfrontFunctionEnvironmentSettings = {
+  bundle: false,
+  minify: true,
+  minifyIdentifiers: false,
+  platform: 'node',
+  packages: 'external',
+  target: ['es5'],
+  supported: {
+    'async-await': true
+  }
+}
+
 function buildCli () {
   console.log('Building cli')
   esbuild.buildSync({
@@ -25,12 +46,8 @@ function buildCli () {
 function buildApi () {
   console.log('Building api lambda handler')
   esbuild.buildSync({
+    ...lambdaEnvironmentSettings,
     entryPoints: ['api.handler.js'],
-    bundle: true,
-    minify: true,
-    platform: 'node',
-    packages: 'external',
-    target: ['node24'],
     outfile: 'dist/api_handler.js'
   })
 }
@@ -38,32 +55,17 @@ function buildApi () {
 function buildS3 () {
   console.log('Building s3 lambda handler')
   esbuild.buildSync({
+    ...lambdaEnvironmentSettings,
     entryPoints: ['s3.handler.js'],
-    bundle: true,
-    minify: true,
-    platform: 'node',
-    packages: 'external',
-    target: ['node24'],
     outfile: 'dist/s3_handler.js'
   })
 }
 
 function buildEdge () {
   console.log('Building edge lambda handler')
-  const base = {
-    entryPoints: ['edge.handler.js'],
-    bundle: false,
-    minify: true,
-    minifyIdentifiers: false,
-    platform: 'node',
-    packages: 'external',
-    target: ['es5'],
-    supported: {
-      'async-await': true
-    }
-  }
   esbuild.buildSync({
-    ...base,
+    ...cloudfrontFunctionEnvironmentSettings,
+    entryPoints: ['edge.handler.js'],
     drop: ['console'],
     define: {
       CLOUDFORMATION: 'true'
@@ -71,7 +73,8 @@ function buildEdge () {
     outfile: 'dist/edge_handler.js'
   })
   esbuild.buildSync({
-    ...base,
+    entryPoints: ['edge.handler.js'],
+    target: ['node24'],
     drop: ['console'],
     define: {
       CLOUDFORMATION: 'false'

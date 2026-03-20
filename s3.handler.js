@@ -1,3 +1,5 @@
+require('source-map-support').install()
+
 const path = require('node:path')
 
 const logger = require('./src/logger').configure({ level: 'verbose' }).getLogger()

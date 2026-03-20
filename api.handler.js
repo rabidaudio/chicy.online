@@ -1,3 +1,5 @@
+require('source-map-support').install()
+
 const serverless = require('serverless-http')
 
 require('./src/logger').configure({ level: 'verbose' })
