@@ -70,6 +70,8 @@ async function testSite (ctx) {
   expect(res.json.status).to.equal('OK')
   expect(res.json.data.siteId).to.exist
   ctx.siteId = res.json.data.siteId
+  expect(res.json.data.baseDomain).to.contain(ctx.siteId)
+  ctx.baseDomain = res.json.data.baseDomain
   expect(res.json.data.name).to.equal('Test Site')
   expect(res.json.data.userId).to.equal(ctx.userId)
   expect(res.json.data.createdAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
@@ -136,6 +138,7 @@ async function testDeploy (ctx) {
     if (!res.wasCached) {
       await s3.upload(ctx.uploadPath, (await buffer(tarball1)), { credentials: ctx.credentials })
 
+      console.log('wait for deployment to complete', ctx.deploymentId1)
       const deployed = await prompts.confirm({ message: 'Deployment completed?' })
       expect(deployed).to.be.true
     }
@@ -159,6 +162,7 @@ async function testDeploy (ctx) {
     expect(res.json.data.deployment.deploymentId).to.equal(ctx.deploymentId1)
 
     if (!res.wasCached) {
+      console.log('wait for promotion to complete', ctx.deploymentId1)
       const promoted = await prompts.confirm({ message: 'Promotion completed?' })
       expect(promoted).to.be.true
     }
@@ -172,7 +176,7 @@ async function testDeploy (ctx) {
     expect(res.json.data.deployedAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
 
     if (!res.wasCached) {
-      console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
+      console.log('Site deployed: ', ctx.baseDomain)
       const live = await prompts.confirm({ message: 'live?' })
       expect(live).to.be.true
     }
@@ -203,6 +207,7 @@ async function testDeploy (ctx) {
     if (!res.wasCached) {
       await s3.upload(ctx.uploadPath, (await buffer(tarball2)), { credentials: ctx.credentials })
 
+      console.log('wait for deployment to complete', ctx.deploymentId2)
       const deployed = await prompts.confirm({ message: 'Deployment completed?' })
       expect(deployed).to.be.true
     }
@@ -213,7 +218,7 @@ async function testDeploy (ctx) {
     expect(res.json.status).to.equal('OK')
 
     if (!res.wasCached) {
-      console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
+      console.log('Wait for promotion to complete and site to update', ctx.baseDomain)
       const live = await prompts.confirm({ message: 'live?' })
       expect(live).to.be.true
     }
@@ -234,7 +239,7 @@ async function testDeploy (ctx) {
     expect(res.json.status).to.equal('OK')
 
     if (!res.wasCached) {
-      console.log(api.host.replace('api.', `${ctx.siteId}.sites.`))
+      console.log('Wait for prmotion to complete and site to update', ctx.baseDomain)
       const live = await prompts.confirm({ message: 'rolled back?' })
       expect(live).to.be.true
     }

@@ -59,12 +59,12 @@ async function showSites (argv) {
     }
   }
   showTable(sites.map(({
-    name, siteId, customDomain, state, currentDeploymentId, createdAt, deployedAt
+    name, siteId, customDomain, baseDomain, state, currentDeploymentId, createdAt, deployedAt
   }) => ({
     name: chalk.black(name),
     siteId: chalk.bold(siteId),
     state: colorizeState(state),
-    domain: chalk.underline(customDomain || getSiteDomain(siteId)),
+    domain: chalk.underline(customDomain || baseDomain),
     deployment: currentDeploymentId,
     created: isInteractive ? relativeTime(createdAt) : createdAt,
     published: isInteractive ? relativeTime(deployedAt) : deployedAt
@@ -121,15 +121,16 @@ async function configure (argv) {
         console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain) + '.')
       } else {
         console.log(chalk.green('Custom domain removed. ') +
-          'You can still access your site at ' + chalk.underline('https://'+getSiteDomain(argv.site)) + '.')
+          'You can still access your site at ' + chalk.underline('https://' + site.baseDomain) + '.')
       }
     } else {
       // not yet published
       if (customDomain) {
-        console.log(chalk.green('Done. ') + 'When published, your site will be available at ' + chalk.underline(customDomain) + '.')
+        console.log(chalk.green('Done. ') + 'When published, your site will be available at ' +
+          chalk.underline(customDomain) + '.')
       } else {
         console.log(chalk.green('Custom domain removed. ') +
-        'You will still be able access your site at ' + chalk.underline('https://'+getSiteDomain(argv.site)) + '.')
+        'You will still be able access your site at ' + chalk.underline('https://' + site.baseDomain) + '.')
       }
     }
   } else {
@@ -156,7 +157,8 @@ async function regenerateKey (argv) {
   const { siteId, deployKey } = await argv.api.regenerateKey({ siteId: argv.site })
   if (isInteractive) {
     console.log(chalk.green('Deploy key regenerated for ') + chalk.bold(siteId))
-    console.warn(chalk.gray("This deploy key can be used to deploy your site from a CI server. Be sure to save it, we'll only show it once."))
+    console.warn(chalk.gray('This deploy key can be used to deploy your site from a CI server. ' +
+      "Be sure to save it, we'll only show it once."))
     console.log(chalk.bold('Deploy key: ') + deployKey)
   } else {
     console.log(`CHICY_SITE_ID=${siteId} CHICY_DEPLOY_KEY=${deployKey}`)
@@ -241,13 +243,18 @@ async function deploy (argv) {
 
 async function promote (argv) {
   argv.spinner ||= ora()
-  if (isInteractive) console.log(chalk.blue('Promoting deployment ') + chalk.bold(argv.deployment) + chalk.blue(' ...'))
+  if (isInteractive) {
+    console.log(chalk.blue('Promoting deployment ') + chalk.bold(argv.deployment) + chalk.blue(' ...'))
+  }
   argv.spinner.text = 'Promoting...'
-  const { siteId, customDomain } = await argv.api.promote({ siteId: argv.site, deploymentId: argv.deployment })
+  const { siteId, customDomain, baseDomain } = await argv.api.promote({
+    siteId: argv.site,
+    deploymentId: argv.deployment
+  })
 
   if (argv.wait) {
     argv.spinner.text = 'Waiting...'
-    const { state } = await argv.api.waitForPromotion({ siteId: argv.site })
+    const { state } = await argv.api.waitForPromotion({ siteId })
     if (state === 'failed') {
       console.error(chalk.red('Promotion failed.'))
       process.exit(500)
@@ -258,11 +265,11 @@ async function promote (argv) {
     if (argv.wait) {
       argv.spinner.succeed(
         chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' is now live at ') +
-          chalk.underline('https://'+ (customDomain || getSiteDomain(siteId))) + chalk.green('.'))
+          chalk.underline('https://' + (customDomain || baseDomain)) + chalk.green('.'))
     } else {
       argv.spinner.succeed(
         chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' should be live at ') +
-          chalk.underline('https://'+ (customDomain || getSiteDomain(siteId))) + chalk.green('soon.'))
+          chalk.underline('https://' + (customDomain || baseDomain)) + chalk.green(' soon.'))
       console.log('It may take a few minutes for the CDN to invalidate. You may also have to clear ' +
         'your browser cache.')
     }
@@ -276,7 +283,8 @@ async function promote (argv) {
 async function removeSite (argv) {
   if (isInteractive) {
     console.log(chalk.blue('Deleting site ') + chalk.bold(argv.site) + chalk.blue(' ...'))
-    console.warn(chalk.red('This will permanently remove the site ') + chalk.bold(argv.site) + chalk.red(' and all data.'))
+    console.warn(chalk.red('This will permanently remove the site ') + chalk.bold(argv.site) +
+      chalk.red(' and all data.'))
     const siteId = await prompts.input({
       message: 'Enter the siteId to confirm.'
     })
@@ -342,7 +350,8 @@ const authenticateDeployKeyOrUser = async (argv, next) => {
     argv.api.authenticateDeployKey(argv.deployKey)
     const { isLoggedIn, data } = await argv.api.status()
     if (!isLoggedIn) {
-      console.error('Deploy key has expired or been revoked. Please check your key or request a new one with `regenerate`.')
+      console.error('Deploy key has expired or been revoked. Please check your key or request a new one ' +
+        'with `regenerate`.')
       process.exit(1)
     }
     argv.site ||= data.deployKeySiteId

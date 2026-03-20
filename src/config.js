@@ -35,6 +35,8 @@ const generateCommonConfig = () => sanitize({
 
 const sanitize = (config) => {
   let { exclude, retain, headers, rewriteRules } = config
+  exclude ||= []
+  retain ||= []
   exclude = sanitizeStringArray('exclude', exclude)
   retain = sanitizeStringArray('exclude', retain)
   headers ||= {}

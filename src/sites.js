@@ -347,6 +347,7 @@ const sanitize = (site, { showDeployKey } = {}) => {
     // show the site as having a custom domain if it's been attached
     // or there is no tenant yet
     customDomain: customDomain && (!tenantId || domainAttached) ? customDomain : null,
+    baseDomain: getSiteDomain(siteId),
     userId,
     currentDeploymentId,
     deployedAt,

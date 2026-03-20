@@ -49,7 +49,7 @@ const create = async ({ site, message, config }) => {
   const { siteId } = site
   const deploymentId = generateDeploymentId()
 
-  config = Config.sanitize(config)
+  config = Config.sanitize(config || {})
 
   const credentials = await sts.getTemporaryCredentials({
     path: Files.getTarballKey(siteId, deploymentId),
