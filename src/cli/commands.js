@@ -18,7 +18,7 @@ const s3 = require('../s3')
 
 async function init (argv) {
   const { name } = argv
-  if (isInteractive) console.log(chalk.blue('Creating new site'))
+  if (isInteractive) console.log(chalk.blue('Creating new site...'))
   const { siteId, deployKey } = await argv.api.createSite({ name })
 
   if (argv.generateConfig) {
@@ -32,8 +32,9 @@ async function init (argv) {
   }
 
   if (isInteractive) {
-    console.log(chalk.green('Site created: ') + chalk.bold(getSiteDomain(siteId)))
-    console.warn(chalk.gray("This deploy key can be used to deploy your site from a CI server. Be sure to save it, we'll only show it once."))
+    console.log(chalk.green('Site created: ') + chalk.bold(siteId))
+    console.warn(chalk.gray('This deploy key can be used to deploy your site from a CI server. ' +
+      "Be sure to save it, we'll only show it once."))
     console.log(chalk.bold('Deploy key: ') + deployKey)
   } else {
     console.log(`SC_SITE_ID=${siteId} SC_DEPLOY_KEY=${deployKey}`)
@@ -43,6 +44,11 @@ async function init (argv) {
 
 async function showSites (argv) {
   const sites = await argv.api.getSites()
+  if (sites.length === 0) {
+    console.warn(chalk.yellow('You don\'t have any sites yet. ') + 'Create one using the ' +
+      chalk.italic('init') + ' command.')
+    process.exit(0)
+  }
   const colorizeState = (state) => {
     switch (state) {
       case 'ready': return chalk.magenta(state)
@@ -70,10 +76,10 @@ async function configure (argv) {
   const customDomain = argv.domain
   if (isInteractive) {
     if (customDomain) {
-      console.log(chalk.blue('Setting custom domain ') + chalk.bold(customDomain) +
-        chalk.blue(' for site ') + chalk.bold(argv.site))
+      console.log(chalk.blue('Setting custom domain ') + chalk.underline(customDomain) +
+        chalk.blue(' for site ') + chalk.bold(argv.site) + chalk.blue(' ...'))
     } else {
-      console.log(chalk.blue('Removing custom domain from ') + chalk.bold(argv.site))
+      console.log(chalk.blue('Removing custom domain from ') + chalk.bold(argv.site) + chalk.blue(' ...'))
     }
   }
 
@@ -93,7 +99,7 @@ async function configure (argv) {
   const site = await argv.api.updateSite({ siteId: argv.site, customDomain })
 
   if (site.domainState === 'no_change') {
-    logger.warn('Nothing changed.')
+    console.warn(chalk.yellow('Nothing changed.'))
   } else if (site.domainState === 'pending_set') {
     if (isInteractive) {
       argv.spinner ||= ora()
@@ -106,11 +112,21 @@ async function configure (argv) {
   }
 
   if (isInteractive) {
-    if (customDomain) {
-      console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain) + '.')
+    if (site.currentDeployment) {
+      if (customDomain) {
+        console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain) + '.')
+      } else {
+        console.log(chalk.green('Custom domain removed. ') +
+          'You can still access your site at ' + chalk.underline(getSiteDomain(argv.site)) + '.')
+      }
     } else {
-      console.log(chalk.green('Custom domain removed. ') +
-        'You can still access your site at ' + chalk.underline(getSiteDomain(argv.site)) + '.')
+      // not yet published
+      if (customDomain) {
+        console.log(chalk.green('Done. ') + 'When published, your site will be available at ' + chalk.underline(customDomain) + '.')
+      } else {
+        console.log(chalk.green('Custom domain removed. ') +
+        'You will still be able access your site at ' + chalk.underline(getSiteDomain(argv.site)) + '.')
+      }
     }
   } else {
     console.log(argv.site)
@@ -120,15 +136,14 @@ async function configure (argv) {
 
 async function regenerateKey (argv) {
   if (isInteractive) {
-    console.log(chalk.blue('Regenerating deploy key for ') + chalk.bold(argv.site))
+    console.log(chalk.blue('Regenerating deploy key for ') + chalk.bold(argv.site) + chalk.blue(' ...'))
     const { deployKey, deployKeyLastUsedAt } = argv.siteData
-    const doIt = prompts.confirm({
-      message: chalk.red('This will revoke deploy key ') + chalk.bold(deployKey) + (
-        deployKeyLastUsedAt
-          ? chalk.red(' last used ') + chalk.bold(relativeTime(deployKeyLastUsedAt))
-          : chalk.dim('(never used)')
-      ) + chalk.red('. ') + 'Are you sure you want to continue?'
-    })
+    const message = chalk.red('This will revoke deploy key ') + chalk.bold(deployKey.replace(/x+$/, '...')) + (
+      deployKeyLastUsedAt
+        ? chalk.red(' last used ') + chalk.bold(relativeTime(deployKeyLastUsedAt))
+        : chalk.dim(' (never used)')
+    ) + chalk.red('. ') + 'Are you sure you want to continue?'
+    const doIt = await prompts.confirm({ message })
     if (!doIt) {
       console.log(chalk.yellow('Aborted.'))
       process.exit(10)
@@ -136,7 +151,7 @@ async function regenerateKey (argv) {
   }
   const { siteId, deployKey } = await argv.api.regenerateKey({ siteId: argv.site })
   if (isInteractive) {
-    console.log(chalk.green('Deploy key regenerated for ') + chalk.bold(getSiteDomain(siteId)))
+    console.log(chalk.green('Deploy key regenerated for ') + chalk.bold(siteId))
     console.warn(chalk.gray("This deploy key can be used to deploy your site from a CI server. Be sure to save it, we'll only show it once."))
     console.log(chalk.bold('Deploy key: ') + deployKey)
   } else {
@@ -173,7 +188,7 @@ async function showDeployments (argv) {
 
 async function deploy (argv) {
   const { message, exclude, dryRun, config } = argv
-  if (isInteractive) console.log(chalk.blue('Deploying to site ') + chalk.bold(argv.site))
+  if (isInteractive) console.log(chalk.blue('Deploying to site ') + chalk.bold(argv.site) + chalk.blue(' ...'))
   argv.spinner ||= ora()
 
   const allExcludes = [...exclude, ...(config.exclude)]
@@ -222,22 +237,30 @@ async function deploy (argv) {
 
 async function promote (argv) {
   argv.spinner ||= ora()
-  if (isInteractive) console.log(chalk.blue('Promoting deployment ') + chalk.bold(argv.deployment))
+  if (isInteractive) console.log(chalk.blue('Promoting deployment ') + chalk.bold(argv.deployment) + chalk.blue(' ...'))
   argv.spinner.text = 'Promoting...'
   const { siteId, customDomain } = await argv.api.promote({ siteId: argv.site, deploymentId: argv.deployment })
 
   if (argv.wait) {
     argv.spinner.text = 'Waiting...'
-    await argv.api.waitForPromotion({ siteId: argv.site })
+    const { state } = await argv.api.waitForPromotion({ siteId: argv.site })
+    if (state === 'failed') {
+      console.error(chalk.red('Promotion failed.'))
+      process.exit(500)
+    }
   }
 
   if (isInteractive) {
-    argv.spinner.succeed(
-      chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' is now live at ') +
-        chalk.underline(customDomain || getSiteDomain(siteId))
-    )
-    if (!argv.wait) {
-      console.log('It may take a few minutes for the CDN to invalidate. You may also have to clear your browser cache.')
+    if (argv.wait) {
+      argv.spinner.succeed(
+        chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' is now live at ') +
+          chalk.underline(customDomain || getSiteDomain(siteId)) + chalk.green('.'))
+    } else {
+      argv.spinner.succeed(
+        chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' should be live at ') +
+          chalk.underline(customDomain || getSiteDomain(siteId)) + chalk.green('soon.'))
+      console.log('It may take a few minutes for the CDN to invalidate. You may also have to clear ' +
+        'your browser cache.')
     }
   } else {
     argv.spinner.stop()
@@ -248,10 +271,10 @@ async function promote (argv) {
 
 async function removeSite (argv) {
   if (isInteractive) {
-    console.log(chalk.blue('Deleting site ') + chalk.bold(argv.site))
+    console.log(chalk.blue('Deleting site ') + chalk.bold(argv.site) + chalk.blue(' ...'))
+    console.warn(chalk.red('This will permanently remove the site ') + chalk.bold(argv.site) + chalk.red(' and all data.'))
     const siteId = await prompts.input({
-      message: chalk.red('This will permanently remove the site ') + chalk.bold(argv.site) + chalk.red(' and all data. ') +
-        'Enter the siteId to confirm.'
+      message: 'Enter the siteId to confirm.'
     })
     if (siteId !== argv.site) {
       console.log(chalk.yellow('Aborted.'))
@@ -259,7 +282,11 @@ async function removeSite (argv) {
     }
   }
   await argv.api.deleteSite({ siteId: argv.site })
-  if (isInteractive) console.log(chalk.green('Site Removed.'))
+  if (isInteractive) {
+    console.log(chalk.green('Site Removed.'))
+  } else {
+    console.log(argv.site)
+  }
 }
 
 const authenticateUser = async (argv, next) => {

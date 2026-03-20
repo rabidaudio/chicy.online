@@ -140,7 +140,7 @@ const writeConfig = async (site, config) => {
 }
 
 // add/remove custom domain
-// state: no_change, pending_set, cleared
+// state: no_change, pending_set, pending_deploy, cleared
 const setCustomDomain = async (site, newCustomDomain) => {
   const { siteId, tenantId, etag } = site
   const baseDomain = getSiteDomain(siteId)
@@ -156,7 +156,7 @@ const setCustomDomain = async (site, newCustomDomain) => {
 
   if (newCustomDomain === site.customDomain && customDomainPending) {
     // if setting it to the same as the pending value, we're still waiting on it
-    return response('pending_set')
+    return response(tenantId ? 'pending_set' : 'pending_deploy')
   } else if (newCustomDomain === site.customDomain) {
     return response('no_change')
   }
@@ -164,7 +164,7 @@ const setCustomDomain = async (site, newCustomDomain) => {
   if (!tenantId) {
     // if the distro hasn't been created yet, just save the values and move on
     site = await db.put('sites', { ...site, customDomain: newCustomDomain, domainAttached: false })
-    return response(removingDomain ? 'cleared' : 'pending_set')
+    return response(removingDomain ? 'cleared' : 'pending_deploy')
   }
 
   if (site.currentDeployment) {
@@ -178,11 +178,11 @@ const setCustomDomain = async (site, newCustomDomain) => {
   }
 
   if (removingDomain) {
-    const res = await cfront.removeCustomDomain({ siteId, tenantId, etag, baseDomain })
+    const res = await cfront.removeCustomDomain({ tenantId, etag, baseDomain })
     site = await db.put('sites', { ...site, etag: res.etag, customDomain: null, domainAttached: false })
     return response('cleared')
   } else {
-    const res = await cfront.setCustomDomain({ siteId, tenantId, etag, baseDomain, customDomain: newCustomDomain })
+    const res = await cfront.setCustomDomain({ tenantId, etag, baseDomain, customDomain: newCustomDomain })
     site = await db.put('sites', { ...site, etag: res.etag, customDomain: newCustomDomain, domainAttached: false })
     return response('pending_set')
   }
@@ -193,7 +193,10 @@ const setCustomDomain = async (site, newCustomDomain) => {
 // is validated and attach it when it is. Returns one of 'no_custom_domain', 'pending_validation',
 // 'attached', 'not_found', 'no_distribution'
 const attachDomain = async (site) => {
-  const response = (state) => ({ site: sanitize(site), state })
+  const response = (state) => {
+    logger.verbose(`attachDomain ${site.siteId} state=${state}`)
+    return { site: sanitize(site), state }
+  }
 
   if (!site.customDomain) return response('no_custom_domain')
   if (!site.tenantId) return response('no_distribution')
@@ -207,6 +210,7 @@ const attachDomain = async (site) => {
   logger.info(`attaching certificate to ${site.siteId}: ${certificateArn}`)
   res = await cfront.attachCertificate({ tenantId: site.tenantId, etag: site.etag, certificateArn })
   site = await db.put('sites', { ...site, domainAttached: true, etag: res.etag })
+  logger.info(`certificate attached to ${site.siteId}: ${certificateArn}`)
   return response('attached')
 }
 
@@ -215,14 +219,15 @@ const prepareDistribution = async (site) => {
 
   // create the distribution
   logger.info('creating distro tenant')
-  const { siteId, customDomain } = site
+  const { siteId, customDomain, domainAttached } = site
   const baseDomain = getSiteDomain(siteId)
   const { tenant, etag } = await cfront.createTenant({ siteId, customDomain, baseDomain })
   logger.verbose('tenant distro created', tenant)
   site = await db.put('sites', { ...site, tenantId: tenant.Id, etag })
 
-  if (site.customDomain && !site.domainAttached) {
+  if (customDomain && !domainAttached) {
     // wait for the certificate and attach it
+    logger.info('awaiting certificate attachment')
     until(({ state }) => state === 'attached')
       .poll({ interval: 3000, timeout: 5 * 60 * 1000 }, async () => await attachDomain(site))
   }

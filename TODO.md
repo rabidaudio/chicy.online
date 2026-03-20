@@ -1,14 +1,16 @@
 # TODO
 
+- figure out why rewrites are broken again
 - change name and domain
 - production deploy
+  - custom domain table, site has_many
+  - refactor state machines to be a lot more explicit and well defined
+    - rename site ready to unpublished
+  - rename currentDeployment to currentDeploymentId
   - callback url
   - cli env var configuration
   - https://github.com/settings/apps/static-chic-online
 - new features
-  - refactor state machines to be a lot more explicit and well defined
-  - rename currentDeployment to currentDeploymentId
-  - custom domain table, site has_many
   - json vs text outputs from cli
   - error pages
     - https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/creating-custom-error-pages.html

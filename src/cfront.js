@@ -27,19 +27,9 @@ const logger = require('./logger').getLogger()
 const cfClient = new CloudFrontClient()
 const kvsClient = new CloudFrontKeyValueStoreClient()
 
-const tenantParams = ({ siteId, baseDomain, customDomain }) => {
+const domainParams = ({ baseDomain, customDomain }) => {
   const params = {
-    Enabled: true,
-    DistributionId: process.env.DISTRIBUTION_ID,
-    Domains: [{ Domain: baseDomain }],
-    ConnectionGroupId: process.env.CONNECTION_GROUP_ID,
-    Tags: [
-      { Name: 'app', Value: process.env.APP_ID },
-      { Name: 'stage', Value: process.env.NODE_ENV }
-    ],
-    Parameters: [
-      { Name: 'siteId', Value: siteId }
-    ]
+    Domains: [{ Domain: baseDomain }]
   }
   if (customDomain) {
     params.Domains.push({ Domain: customDomain })
@@ -53,8 +43,18 @@ const tenantParams = ({ siteId, baseDomain, customDomain }) => {
 
 const createTenant = async ({ siteId, baseDomain, customDomain }) => {
   const params = {
-    ...tenantParams({ siteId, baseDomain, customDomain }),
-    Name: siteId
+    ...domainParams({ baseDomain, customDomain }),
+    Enabled: true,
+    DistributionId: process.env.DISTRIBUTION_ID,
+    Name: siteId,
+    ConnectionGroupId: process.env.CONNECTION_GROUP_ID,
+    Tags: [
+      { Name: 'app', Value: process.env.APP_ID },
+      { Name: 'stage', Value: process.env.NODE_ENV }
+    ],
+    Parameters: [
+      { Name: 'siteId', Value: siteId }
+    ]
   }
   logger.http(`cloudfront: create tenant ${siteId}`, params)
   const { DistributionTenant, ETag } = await cfClient.send(new CreateDistributionTenantCommand(params))
@@ -77,21 +77,30 @@ const withProperETag = async ({ tenantId, etag }, operationFn) => {
   }
 }
 
-const setCustomDomain = async ({ siteId, tenantId, etag, baseDomain, customDomain }) => {
+const setCustomDomain = async ({ tenantId, etag, baseDomain, customDomain }) => {
   return withProperETag({ tenantId, etag }, async (etag) => {
     logger.http(`cloudfront: update tenant ${tenantId}`)
     const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand({
-      ...tenantParams({ siteId, baseDomain, customDomain }),
+      ...domainParams({ baseDomain, customDomain }),
       Id: tenantId,
       IfMatch: etag
     }))
-    // TODO: try and find cert immediately?
     return { tenant: DistributionTenant, etag: ETag }
   })
 }
 
-const removeCustomDomain = async ({ siteId, tenantId, etag, baseDomain }) => {
-  return await setCustomDomain({ siteId, tenantId, etag, baseDomain, customDomain: null })
+const removeCustomDomain = async ({ tenantId, etag, baseDomain }) => {
+  return withProperETag({ tenantId, etag }, async (etag) => {
+    const params = {
+      ...domainParams({ baseDomain, customDomain: null }),
+      Id: tenantId,
+      IfMatch: etag,
+      Customizations: {} // removes the certificate
+    }
+    logger.http(`cloudfront: update tenant ${tenantId}`, params)
+    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand(params))
+    return { tenant: DistributionTenant, etag: ETag }
+  })
 }
 
 // Search for an Issued certificate matching the domain manged by cloudfront

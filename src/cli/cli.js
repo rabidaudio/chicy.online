@@ -34,8 +34,8 @@ module.exports = async function main (inArgv = process.argv) {
     .usage(`${chalk.bold('$0')}   ` +
         chalk.green('Create and deploy static sites on', chalk.underline(APP_NAME) + '.\n\n') +
 
-        '  $0 init\n' +
-        '  $0 deploy --promote myapp/dist\n\n' +
+        chalk.black('  $0 init\n') +
+        chalk.black('  $0 deploy myapp/dist --promote --wait\n\n') +
 
         chalk.bold('Authentication') + '\n' + chalk.dim(chalk.underline(APP_NAME),
         'uses GitHub for authentication. When running interactively it will prompt for you ' +
@@ -44,8 +44,8 @@ module.exports = async function main (inArgv = process.argv) {
         chalk.bold('Deploy Key') + '\n' + chalk.dim(
         'When running non-interactively, such as during a CI ' +
         'build process, most commands can instead use a deploy key. A deploy key is generated ' +
-        'when a site is initialized. Set this value to an `SC_DEPLOY_KEY` environment variable ' +
-        'in your build environment to authenticate deployments and promotions.\n\n') +
+        'when a site is initialized. Set this value to the ' + chalk.bold('SC_DEPLOY_KEY') +
+        ' environment variable in your build environment to authenticate deployments and promotions.\n\n') +
 
         chalk.bold('Custom Domains') + '\n' + chalk.dim(
         'Every site is given a site ID which is used as a unique subdomain, e.g. `' +
@@ -59,7 +59,7 @@ module.exports = async function main (inArgv = process.argv) {
     return this.option('site', {
       alias: 's',
       type: 'string',
-      describe: 'The site subdomain, e.g. `teeny-angle-dwas5`'
+      describe: 'The site subdomain, e.g. ' + chalk.bold('teeny-angle-dwas5')
     })
       .default('site', () => {
         if (process.env.SC_SITE_ID) return process.env.SC_SITE_ID
@@ -70,12 +70,12 @@ module.exports = async function main (inArgv = process.argv) {
     y.option('name', {
       alias: 'n',
       describe: 'A name for the site'
-    }.option('generate-config', {
-      description: 'By default, `init` generates a template config file to use with the site ' +
-        "if one doesn't already exist. You can disable this with `--no-generate-config`",
+    }).option('generate-config', {
+      description: 'By default, ' + chalk.italic('init') + ' generates a template config file to use with the site ' +
+        "if one doesn't already exist. You can disable this with " + chalk.italic('--no-generate-config'),
       type: 'boolean',
       default: true
-    })), cmd()
+    }), cmd()
     .use(authenticateUser)
     .use(requestOption('name', async () => {
       if (isInteractive) {
@@ -95,7 +95,8 @@ module.exports = async function main (inArgv = process.argv) {
         .option('domain', {
           alias: 'd',
           string: true,
-          describe: 'Add a custom domain to the site. Remove it by setting to blank or using `--no-domain`'
+          describe: 'Add a custom domain to the site. Remove it by setting to blank or using ' +
+            chalk.dim('--no-domain')
         })
         .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))),
     cmd()
@@ -127,14 +128,15 @@ module.exports = async function main (inArgv = process.argv) {
 
     .command('deploy [path]', chalk.bold('Create a new deployment for the site.\n') +
         chalk.dim('A deployment isn\'t automatically promoted to live by default. Use the ' +
-        '`promote` command or the `--promote` flag to promote after deployment.'), y =>
+        chalk.italic('promote') + ' command or the ' + chalk.italic('--promote') +
+        ' flag to promote after deployment.'), y =>
       y.example('deploy --site teeny-angle-dwas5 --promote --wait myapp/dist')
         .positional('path', { describe: 'The path to the root directory of static files', normalize: true })
         .siteOption()
         .option('message', { alias: 'm', describe: 'an optional description of the deployment' })
         .option('exclude', {
           alias: 'x',
-          describe: 'a glob of files relative to `path` to exclude from the deployment. ' +
+          describe: 'a glob of files relative to ' + chalk.italic('path') + ' to exclude from the deployment. ' +
             'These are in addition to any defined in the config file.',
           type: 'array',
           default: []
@@ -154,7 +156,7 @@ module.exports = async function main (inArgv = process.argv) {
       y.example('promote --wait --site teeny-angle-dwas5 0000019cd5515615dd304c19')
         .siteOption()
         .positional('deployment', {
-          describe: 'The ID of the deployment to promote, e.g. `0000019cd5515615dd304c19`.'
+          describe: 'The ID of the deployment to promote, e.g. ' + chalk.bold('d_0000019cd5515615dd304c19') + '.'
         }).default('deployment', () => {
           if (process.env.SC_DEPLOY_ID) return process.env.SC_DEPLOY_ID
         }, '$SC_DEPLOY_ID')
@@ -169,7 +171,7 @@ module.exports = async function main (inArgv = process.argv) {
           // TODO: get the site's deployments
           const deployments = await argv.api.getDeployments({ siteId: argv.site })
           if (deployments.length === 0) {
-            console.error('No deployments for this site. Create one using the `deploy` command')
+            console.error('No deployments for this site. Create one using the ' + chalk.italic('deploy') + ' command')
             process.exit(1)
           }
           return await prompts.select({
@@ -240,7 +242,7 @@ const requestSite = requestOption('site', async (argv) => {
     const sites = await argv.api.getSites()
 
     if (sites.length === 0) {
-      console.error('You need to create a site first using the `init` command')
+      console.error(chalk.yellow('You need to create a site first using the ' + chalk.italic('init') + ' command.'))
       process.exit(1)
     }
     return await prompts.select({

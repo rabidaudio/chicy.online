@@ -170,7 +170,7 @@ const promote = async ({ promoteKey }) => {
   }
   const { siteId, deploymentId } = promoteParams
 
-  logger.info(`Promotion requested for ${siteId} / ${deploymentId}`)
+  logger.info(`Promotion requested for ${siteId}/${deploymentId}`)
 
   let site = await db.get('sites', { siteId })
   let deployment = await db.get('deployments', { siteId, deploymentId })
@@ -178,7 +178,7 @@ const promote = async ({ promoteKey }) => {
     logger.warn(`Unknown deployment: ${siteId}/${deploymentId}`)
     return
   }
-  const hasDistro = !!site.tenantId
+  const hasDistro = site.tenantId
 
   try {
     const prepare = async () => {
@@ -187,7 +187,7 @@ const promote = async ({ promoteKey }) => {
       }
     }
     // run in parallel. We can be setting up cloudformation while we deal with the files
-    await Promise.all([prepare, Files.promote({ siteId, deploymentId })])
+    await Promise.all([prepare(), Files.promote({ siteId, deploymentId })])
 
     // ...but we can't invalidate until all the files have been loaded
     if (hasDistro) {
@@ -200,6 +200,7 @@ const promote = async ({ promoteKey }) => {
 
     return { site, deployment }
   } catch (err) {
+    console.error('promote failed. saving state', err)
     deployment = await db.put('deployments', { ...deployment, state: 'failed' })
     site = await Sites.trackDeploymentFailed(site, err.message)
     throw err
