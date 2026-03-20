@@ -2,7 +2,12 @@ const consoleTablePrinter = require('console-table-printer')
 const CliTable = require('cli-table3')
 const moment = require('moment')
 
-const SITE_DOMAIN = process.env.SITE_DOMAIN || 'sites.dev.static-chic.online'
+// These are injected during esbuild
+const BIN_NAME = process.env.BIN_NAME
+const APP_NAME = process.env.APP_NAME
+const API_HOST = process.env.API_HOST
+const SITE_DOMAIN = process.env.SITE_DOMAIN
+if (!BIN_NAME || !APP_NAME || !API_HOST || !SITE_DOMAIN) throw new Error('Configuration missing')
 
 const isInteractive = require('is-interactive').default()
 
@@ -76,6 +81,10 @@ const showTable = (data) => {
 }
 
 module.exports = {
+  BIN_NAME,
+  APP_NAME,
+  API_HOST,
+  SITE_DOMAIN,
   isInteractive,
   relativeTime,
   getSiteDomain,

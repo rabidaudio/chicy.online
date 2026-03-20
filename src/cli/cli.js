@@ -10,6 +10,7 @@ const Config = require('../config')
 
 const { Api } = require('./api')
 const {
+  BIN_NAME, APP_NAME, API_HOST,
   isInteractive,
   getSiteDomain, relativeTime,
   cmd, demandOption, requestOption
@@ -21,11 +22,6 @@ const {
   authenticateUser, authenticateDeployKeyOrUser,
   resolveSite
 } = require('./commands')
-
-// These are injected during esbuild
-const BIN_NAME = process.env.BIN_NAME || 'statchic'
-const APP_NAME = process.env.APP_NAME || 'static-chic.online'
-const API_HOST = process.env.API_HOST || 'https://api.static-chic.online'
 
 module.exports = async function main (inArgv = process.argv) {
   const cli = yargs(hideBin(inArgv))

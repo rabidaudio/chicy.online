@@ -37,7 +37,7 @@ const runTests = (...tests) => {
 class Api {
   // 'playback' | 'cache' | 'record' | 'erase'
   constructor (mode = process.env.VCR_MODE || 'cache') {
-    this.host = process.env.TEST_HOST || 'https://api.dev.static-chic.online'
+    this.host = process.env.TEST_HOST || 'http://localhost:4000'
     this.mode = mode
     this.headers = {}
     this.index = 0

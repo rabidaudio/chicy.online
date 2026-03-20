@@ -1,6 +1,6 @@
 org: rabidaudio
-app: static-chic
-service: static-chic
+app: ${env:APP_NAME}
+service: ${env:APP_NAME}
 
 stages:
   default:

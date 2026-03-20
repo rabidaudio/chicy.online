@@ -87,7 +87,7 @@ async function configure (argv) {
   if (customDomain) {
     try {
       logger.verbose(`verifying domain ${customDomain}`)
-      await verifyCustomDomain(argv.site, customDomain)
+      await verifyCustomDomain(argv.site, customDomain, [getSiteDomain(argv.site)])
     } catch (err) {
       if (err instanceof DomainValidationFailedError) {
         console.error(chalk.red(err.fullMessage))

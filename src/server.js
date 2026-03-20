@@ -208,14 +208,14 @@ const handleDomainValidationError = async (ctx, next) => {
   } catch (err) {
     if (err instanceof DomainValidationFailedError) {
       ctx.status = 400
-      const { message, code, target, results } = err
+      const { message, code, allowed, results } = err
       ctx.body = {
         status: 'ERROR',
         error: {
           message: err.fullMessage,
           reason: message,
           code,
-          target,
+          allowed,
           results
         }
       }

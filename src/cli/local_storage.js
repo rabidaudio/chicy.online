@@ -5,10 +5,12 @@ const { JSONFilePreset } = require('lowdb/node')
 
 let _db
 
+const { APP_NAME } = require('./utils')
+
 module.exports.getDb = async () => {
   if (_db) return _db
 
-  const configDir = path.join(xdg.configDirs()[0], 'static-chic')
+  const configDir = path.join(xdg.configDirs()[0], APP_NAME)
   _db = await JSONFilePreset(configDir, {})
   return _db
 }

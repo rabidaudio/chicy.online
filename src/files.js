@@ -190,8 +190,8 @@ class Repo {
   }
 
   async config () {
-    await this.git.addConfig('user.email', 'bot@static-chic.online')
-    await this.git.addConfig('user.name', 'bot@static-chic.online')
+    await this.git.addConfig('user.email', `bot@${process.env.SITES_DOMAIN}`)
+    await this.git.addConfig('user.name', `bot@${process.env.SITES_DOMAIN}`)
     await this.git.addConfig('lfs.customtransfer.git-lfs-s3.path', 'git-lfs-s3')
     await this.git.addConfig('lfs.standalonetransferagent', 'git-lfs-s3')
     const config = await this.git.listConfig()

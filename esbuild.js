@@ -1,3 +1,5 @@
+require('@dotenvx/dotenvx').config({ quiet: true })
+
 const yargs = require('yargs')
 const { hideBin } = require('yargs/helpers')
 const esbuild = require('esbuild')
@@ -23,18 +25,21 @@ const cloudfrontFunctionEnvironmentSettings = {
   }
 }
 
+const loadFromEnv = (...keys) => {
+  const defines = {}
+  for (const key of keys) {
+    if (!process.env[key]) throw new Error(`Env var ${key} must be defined`)
+    defines[`process.env.${key}`] = `'${process.env[key]}'`
+  }
+  return defines
+}
+
 function buildCli () {
   console.log('Building cli')
   esbuild.buildSync({
     entryPoints: ['src/cli/index.js'],
     bundle: true,
-    define: {
-      'process.env.BIN_NAME': '\'statchic\'',
-      'process.env.APP_NAME': '\'static-chic.online\'',
-      'process.env.API_HOST': '\'https://api.static-chic.online\'',
-      'process.env.SITE_DOMAIN': '\'sites.static-chic.online\'',
-      'process.env.CONFIG_NAME': '\'.chicy.json\''
-    },
+    define: loadFromEnv('APP_NAME', 'BIN_NAME', 'API_HOST', 'SITE_DOMAIN', 'CONFIG_NAME'),
     minify: true,
     platform: 'node',
     packages: 'external',

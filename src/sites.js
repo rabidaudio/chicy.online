@@ -18,14 +18,17 @@ class DomainValidationFailedError extends Error {
     super(shortMessage, options)
     this.code = options.code
     this.source = options.source
-    this.target = options.target
+    this.allowed = options.allowed
     if (options.results) this.results = options.results
   }
 
   get fullMessage () {
     return `Domain validation failed: ${this.message}.\n` +
       `You must set a CNAME DNS record pointing your custom domain '${this.source}' to ` +
-      `'${this.target}' before adding a custom domain. It may take a few minutes after ` +
+      (this.allowed.length === 1
+        ? `'${this.allowed[0]}'`
+        : ('one of ' + this.allowed.map(v => `'${v}'`).join(', '))) +
+      ' before adding a custom domain. It may take a few minutes after ' +
       'creating the record before the change is detected.'
   }
 }
@@ -44,35 +47,35 @@ const getSiteDomain = (siteId) => `${siteId}.${process.env.SITES_DOMAIN}`
 
 // Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
 // if not, return silently if verified
-const verifyCustomDomain = async (siteId, customDomain) => {
-  const target = getSiteDomain(siteId)
+const verifyCustomDomain = async (siteId, customDomain, allowed) => {
   try {
     logger.http(`dns: resolve ${customDomain} CNAME`)
     const results = await dns.resolveCname(customDomain)
     logger.http(`dns: resolved ${customDomain} CNAME`, results)
     if (results.length === 0) {
       throw new DomainValidationFailedError('record has no value', {
-        code: 'INVALID', source: customDomain, target
+        code: 'INVALID', source: customDomain, allowed
       })
     }
-    if (results[0] === target) return // ok
-    if (results[0] === process.env.DISTRIBUTION_DOMAIN) return // ok also
+    for (const target of allowed) {
+      if (results[0] === target) return // ok
+    }
     throw new DomainValidationFailedError('record has incorrect value', {
-      code: 'INVALID', source: customDomain, target, results
+      code: 'INVALID', source: customDomain, allowed, results
     })
   } catch (err) {
     if (err.code === 'ENOTFOUND') {
       throw new DomainValidationFailedError('domain name has no records', {
-        code: 'NOT_FOUND', source: customDomain, target, cause: err
+        code: 'NOT_FOUND', source: customDomain, allowed, cause: err
       })
     }
     if (err.code === 'ENODATA') {
       throw new DomainValidationFailedError('domain name has non-CNAME records', {
-        code: 'NOT_FOUND', source: customDomain, target, cause: err
+        code: 'NOT_FOUND', source: customDomain, allowed, cause: err
       })
     }
     throw new DomainValidationFailedError(err.message, {
-      code: 'UNKNOWN', source: customDomain, target, cause: err
+      code: 'UNKNOWN', source: customDomain, allowed, cause: err
     })
   }
 }
@@ -98,7 +101,9 @@ const create = async ({ name, userId, customDomain }) => {
   logger.info(`generating ${siteId}`)
 
   if (customDomain) {
-    await this.verifyCustomDomain(siteId, customDomain)
+    await this.verifyCustomDomain(siteId, customDomain, [
+      getSiteDomain(siteId), process.env.DISTRIBUTION_DOMAIN
+    ])
   }
 
   await r53.createSubdomain(siteDomain)
