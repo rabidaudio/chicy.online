@@ -67,9 +67,10 @@ async function showSites (argv) {
 }
 
 async function configure (argv) {
+  const customDomain = argv.domain
   if (isInteractive) {
-    if (argv.domain) {
-      console.log(chalk.blue('Setting custom domain ') + chalk.bold(argv.domain) +
+    if (customDomain) {
+      console.log(chalk.blue('Setting custom domain ') + chalk.bold(customDomain) +
         chalk.blue(' for site ') + chalk.bold(argv.site))
     } else {
       console.log(chalk.blue('Removing custom domain from ') + chalk.bold(argv.site))
@@ -77,27 +78,39 @@ async function configure (argv) {
   }
 
   // TODO: client doesn't know what cloudfront domain to allow
-  // if (argv.domain) {
-  //   try {
-  //     logger.verbose(`verifying domain ${argv.domain}`)
-  //     await verifyCustomDomain(argv.site, argv.domain)
-  //   } catch (err) {
-  //     if (err instanceof DomainValidationFailedError) {
-  //       // logger.verbose('validation failed', err)
-  //       console.error(chalk.red(err.fullMessage))
-  //       process.exit(20)
-  //     }
-  //     throw err
-  //   }
-  // }
+  if (customDomain) {
+    try {
+      logger.verbose(`verifying domain ${customDomain}`)
+      await verifyCustomDomain(argv.site, customDomain)
+    } catch (err) {
+      if (err instanceof DomainValidationFailedError) {
+        console.error(chalk.red(err.fullMessage))
+        process.exit(20)
+      }
+      throw err
+    }
+  }
+  const site = await argv.api.updateSite({ siteId: argv.site, customDomain })
 
-  const { siteId, customDomain } = await argv.api.updateSite({ siteId: argv.site, customDomain: argv.domain })
+  if (site.domainState === 'no_change') {
+    logger.warn('Nothing changed.')
+  } else if (site.domainState === 'pending_set') {
+    if (isInteractive) {
+      argv.spinner ||= ora()
+      argv.spinner.text = 'Waiting for certificate validation...'
+      argv.spinner.start()
+    }
+    // now poll until certificate is issued and attached
+    await argv.api.waitForDomain({ siteId: argv.site })
+    if (isInteractive) argv.spinner.succeed('Certificate attached')
+  }
+
   if (isInteractive) {
     if (customDomain) {
-      console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain))
+      console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain) + '.')
     } else {
       console.log(chalk.green('Custom domain removed. ') +
-        'You can still access your site at ' + chalk.underline(getSiteDomain(siteId)))
+        'You can still access your site at ' + chalk.underline(getSiteDomain(argv.site)) + '.')
     }
   } else {
     console.log(argv.site)
@@ -215,7 +228,7 @@ async function promote (argv) {
 
   if (argv.wait) {
     argv.spinner.text = 'Waiting...'
-    await argv.api.waitForSite({ siteId: argv.site })
+    await argv.api.waitForPromotion({ siteId: argv.site })
   }
 
   if (isInteractive) {

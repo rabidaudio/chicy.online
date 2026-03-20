@@ -6,6 +6,9 @@
   - cli env var configuration
   - https://github.com/settings/apps/static-chic-online
 - new features
+  - refactor state machines to be a lot more explicit and well defined
+  - rename currentDeployment to currentDeploymentId
+  - custom domain table, site has_many
   - json vs text outputs from cli
   - error pages
     - https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/creating-custom-error-pages.html

@@ -227,13 +227,28 @@ const handleDomainValidationError = async (ctx, next) => {
 
 router.put('/sites/:siteId', requireUserAuth, findSite, handleDomainValidationError, async (ctx) => {
   const { customDomain } = ctx.request.body
-  let data = ctx.site
-  if (customDomain === undefined || (!customDomain && !ctx.site.customDomain) || customDomain === ctx.site.customDomain) {
+  const { site, state } = await Sites.setCustomDomain(ctx.site, customDomain)
+  if (state === 'no_change') {
     ctx.status = 202 // indicate that the custom domain didn't change so nothing happened
-  } else {
-    data = await Sites.setCustomDomain(ctx.site, customDomain)
   }
-  ctx.body = { status: 'OK', data }
+  ctx.body = { status: 'OK', data: { ...site, domainState: state } }
+})
+
+router.post('/sites/:siteId/attachDomain', requireUserAuth, findSite, async (ctx) => {
+  const { site, state } = await Sites.attachDomain(ctx.site)
+  switch (state) {
+    case 'no_custom_domain':
+    case 'attached':
+    case 'no_distribution':
+      ctx.status = 200
+      break
+    case 'pending_validation':
+    case 'not_found':
+      ctx.status = 202 // indicate we're still waiting
+      break
+    default: throw new Error(`Unexpected state: ${state}`)
+  }
+  ctx.body = { status: 'OK', data: { ...site, domainState: state } }
 })
 
 // To invalidate a deploy key, simply regenerate and forget it

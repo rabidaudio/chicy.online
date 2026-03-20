@@ -1,3 +1,5 @@
+const { duration } = require('moment')
+
 const { until } = require('../poll')
 
 const logger = require('../logger').getLogger()
@@ -89,23 +91,34 @@ class Api {
     return data
   }
 
-  async waitForSite ({ siteId }) {
+  async waitForPromotion ({ siteId }) {
     return await until(({ state }) => state !== 'deploying')
-      .poll(async () => await this.getSite({ siteId }))
+      .poll({
+        interval: duration(15, 's'),
+        timeout: duration(10, 'm')
+      }, async () => await this.getSite({ siteId }))
   }
 
   async updateSite ({ siteId, customDomain }) {
-    const { res, data } = await this.fetch(`/sites/${siteId}`, {
+    const { data } = await this.fetch(`/sites/${siteId}`, {
       method: 'PUT',
       body: JSON.stringify({ customDomain }),
       headers: {
         'Content-Type': 'application/json'
       }
     })
-    if (res.status === 202) {
-      logger.warn('Nothing changed.')
-    }
     return data
+  }
+
+  async attachDomain ({ siteId }) {
+    const { res, data } = await this.fetch(`/sites/${siteId}/attachDomain`, { method: 'POST' })
+    if (res.status === 202) return null // still waiting for attachment
+    return data // otherwise done, return site
+  }
+
+  async waitForDomain ({ siteId }) {
+    return await until((site) => site)
+      .poll({ timeout: duration(3, 'm') }, async () => await this.attachDomain({ siteId }))
   }
 
   async regenerateKey ({ siteId }) {
@@ -136,7 +149,10 @@ class Api {
 
   async waitForDeployment ({ siteId, deploymentId }) {
     return await until(({ state }) => state !== 'pending')
-      .poll(async () => await this.getDeployment({ siteId, deploymentId }))
+      .poll({
+        interval: duration(15, 's'),
+        timeout: duration(10, 'm')
+      }, async () => await this.getDeployment({ siteId, deploymentId }))
   }
 
   async promote ({ siteId, deploymentId }) {

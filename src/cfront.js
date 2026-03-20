@@ -20,12 +20,14 @@ const {
   DescribeKeyValueStoreCommand
 } = require('@aws-sdk/client-cloudfront-keyvaluestore')
 
+const { ACMClient, ListCertificatesCommand } = require('@aws-sdk/client-acm')
+
 const logger = require('./logger').getLogger()
 
 const cfClient = new CloudFrontClient()
 const kvsClient = new CloudFrontKeyValueStoreClient()
 
-const tenantParams = ({ siteId, enabled, baseDomain, customDomain }) => {
+const tenantParams = ({ siteId, baseDomain, customDomain }) => {
   const params = {
     Enabled: true,
     DistributionId: process.env.DISTRIBUTION_ID,
@@ -39,7 +41,6 @@ const tenantParams = ({ siteId, enabled, baseDomain, customDomain }) => {
       { Name: 'siteId', Value: siteId }
     ]
   }
-  if (enabled !== undefined) params.Enabled = enabled
   if (customDomain) {
     params.Domains.push({ Domain: customDomain })
     params.ManagedCertificateRequest = {
@@ -66,28 +67,100 @@ const getTenant = async (tenantId) => {
   return { tenant: DistributionTenant, etag: ETag }
 }
 
-const updateTenant = async ({ tenantId, siteId, enabled, baseDomain, customDomain, etag, attempted }) => {
+const withProperETag = async ({ tenantId, etag }, operationFn) => {
   try {
-    const params = {
-      ...tenantParams({ siteId, enabled, baseDomain, customDomain }),
-      Id: tenantId,
-      IfMatch: etag
-    }
-    logger.http(`cloudfront: update tenant ${siteId}`, params)
-    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand(params))
-    return { tenant: DistributionTenant, etag: ETag }
+    return await operationFn(etag)
   } catch (err) {
-    if (!attempted) {
-      // could be the etag is invalid. Try grabbing and trying again
-      const res = await getTenant(tenantId)
-      return await updateTenant({ tenantId, siteId, enabled, baseDomain, customDomain, etag: res.etag, attempted: true })
-    }
+    // could be the etag is invalid. Try grabbing and trying again
+    const res = await getTenant(tenantId)
+    return await operationFn(res.etag)
   }
 }
 
+const setCustomDomain = async ({ siteId, tenantId, etag, baseDomain, customDomain }) => {
+  return withProperETag({ tenantId, etag }, async (etag) => {
+    logger.http(`cloudfront: update tenant ${tenantId}`)
+    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand({
+      ...tenantParams({ siteId, baseDomain, customDomain }),
+      Id: tenantId,
+      IfMatch: etag
+    }))
+    // TODO: try and find cert immediately?
+    return { tenant: DistributionTenant, etag: ETag }
+  })
+}
+
+const removeCustomDomain = async ({ siteId, tenantId, etag, baseDomain }) => {
+  return await setCustomDomain({ siteId, tenantId, etag, baseDomain, customDomain: null })
+}
+
+// Search for an Issued certificate matching the domain manged by cloudfront
+const findCloudfrontCertificateMatching = async (domain) => {
+  // find a certificate for the domain
+  const acm = new ACMClient()
+  let NextToken
+  let pendingCert = null
+  while (true) {
+    const res = await acm.send(new ListCertificatesCommand({
+      CertificateStatuses: ['PENDING_VALIDATION', 'ISSUED'],
+      Includes: { managedBy: 'CLOUDFRONT' },
+      SortBy: 'CREATED_AT',
+      SortOrder: 'DESCENDING',
+      MaxItems: 1000,
+      NextToken
+    }))
+    for (const cert of res.CertificateSummaryList) {
+      if (cert.DomainName !== domain) continue
+
+      if (cert.Status === 'ISSUED') {
+        return { certificateArn: cert.CertificateArn, isIssued: true }
+      }
+      // hold onto it but keep looking for an issued one
+      if (cert.Status === 'PENDING_VALIDATION' && !pendingCert) pendingCert = cert
+    }
+    if (!res.NextToken || res.CertificateSummaryList.length === 0) break
+    NextToken = res.NextToken
+  }
+  if (pendingCert) {
+    return { certificateArn: pendingCert.CertificateArn, isIssued: false }
+  }
+
+  return null
+}
+
+const attachCertificate = async ({ tenantId, etag, certificateArn }) => {
+  return withProperETag({ tenantId, etag }, async (etag) => {
+    logger.http(`cloudfront: disable tenant ${tenantId}`)
+    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand({
+      Id: tenantId,
+      IfMatch: etag,
+      Customizations: {
+        Certificate: {
+          Arn: certificateArn
+        }
+      }
+    }))
+    return { tenant: DistributionTenant, etag: ETag }
+  })
+}
+
+const disableTenant = async ({ tenantId, etag }) => {
+  return withProperETag({ tenantId, etag }, async (etag) => {
+    logger.http(`cloudfront: disable tenant ${tenantId}`)
+    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand({
+      Id: tenantId,
+      IfMatch: etag,
+      Enabled: false
+    }))
+    return { tenant: DistributionTenant, etag: ETag }
+  })
+}
+
 const deleteTenant = async ({ tenantId, etag }) => {
-  logger.http(`cloudfront: delete tenant ${tenantId}`)
-  await cfClient.send(new DeleteDistributionTenantCommand({ Id: tenantId, IfMatch: etag }))
+  return await withProperETag({ tenantId, etag }, async (etag) => {
+    logger.http(`cloudfront: delete tenant ${tenantId}`)
+    await cfClient.send(new DeleteDistributionTenantCommand({ Id: tenantId, IfMatch: etag }))
+  })
 }
 
 const invalidate = async (distributionTenantId) => {
@@ -148,8 +221,12 @@ const deleteConfig = async (keys) => {
 
 module.exports = {
   createTenant,
-  updateTenant,
   getTenant,
+  setCustomDomain,
+  removeCustomDomain,
+  findCloudfrontCertificateMatching,
+  attachCertificate,
+  disableTenant,
   deleteTenant,
   invalidate,
   getInvalidation,

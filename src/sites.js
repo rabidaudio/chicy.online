@@ -140,31 +140,74 @@ const writeConfig = async (site, config) => {
 }
 
 // add/remove custom domain
-const setCustomDomain = async (site, customDomain) => {
+// state: no_change, pending_set, cleared
+const setCustomDomain = async (site, newCustomDomain) => {
   const { siteId, tenantId, etag } = site
-  if (customDomain) await verifyCustomDomain(siteId, customDomain)
+  const baseDomain = getSiteDomain(siteId)
+  const removingDomain = !newCustomDomain
+  const customDomainPending = site.customDomain && !site.domainAttached
 
-  // if distro exists, update it
-  if (tenantId) {
-    logger.info(`updating tenant ${siteId}: domain=${customDomain || 'default'}`)
-    const baseDomain = getSiteDomain(siteId)
-    const res = await cfront.updateTenant({ tenantId, siteId, baseDomain, customDomain, etag })
-    site.etag = res.etag
+  const response = (state) => ({ site: sanitize(site), state })
+
+  if (removingDomain && !site.customDomain) {
+    // no change, still no domain
+    return response('no_change')
   }
-  // otherwise will set on first deploy
 
-  // if currentDeployment exists, get it's config and populate for the custom domain
+  if (newCustomDomain === site.customDomain && customDomainPending) {
+    // if setting it to the same as the pending value, we're still waiting on it
+    return response('pending_set')
+  } else if (newCustomDomain === site.customDomain) {
+    return response('no_change')
+  }
+
+  if (!tenantId) {
+    // if the distro hasn't been created yet, just save the values and move on
+    site = await db.put('sites', { ...site, customDomain: newCustomDomain, domainAttached: false })
+    return response(removingDomain ? 'cleared' : 'pending_set')
+  }
+
   if (site.currentDeployment) {
-    if (customDomain) {
+    // if there's an active deployment, we need to update kvs to support the new domain
+    if (removingDomain) {
+      await cfront.deleteConfig([`config/${site.customDomain}`])
+    } else {
       const { config } = await db.get('deployments', { siteId, deploymentId: site.currentDeployment })
       await writeConfig(site, config)
-    } else {
-      await cfront.deleteConfig([`config/${customDomain}`])
     }
   }
 
-  site = await db.put('sites', { ...site, customDomain })
-  return sanitize(site)
+  if (removingDomain) {
+    const res = await cfront.removeCustomDomain({ siteId, tenantId, etag, baseDomain })
+    site = await db.put('sites', { ...site, etag: res.etag, customDomain: null, domainAttached: false })
+    return response('cleared')
+  } else {
+    const res = await cfront.setCustomDomain({ siteId, tenantId, etag, baseDomain, customDomain: newCustomDomain })
+    site = await db.put('sites', { ...site, etag: res.etag, customDomain: newCustomDomain, domainAttached: false })
+    return response('pending_set')
+  }
+}
+
+// CloudFront will automatically request and validate a certificate but it won't automatically
+// attach it to the tenant. This method gets polled by the frontend to check if the certificate
+// is validated and attach it when it is. Returns one of 'no_custom_domain', 'pending_validation',
+// 'attached', 'not_found', 'no_distribution'
+const attachDomain = async (site) => {
+  const response = (state) => ({ site: sanitize(site), state })
+
+  if (!site.customDomain) return response('no_custom_domain')
+  if (!site.tenantId) return response('no_distribution')
+  if (site.domainAttached) return response('attached')
+
+  let res = await cfront.findCloudfrontCertificateMatching(site.customDomain)
+  if (!res) return response('not_found')
+  const { certificateArn, isIssued } = res
+  if (!isIssued) return response('pending_validation')
+
+  logger.info(`attaching certificate to ${site.siteId}: ${certificateArn}`)
+  res = await cfront.attachCertificate({ tenantId: site.tenantId, etag: site.etag, certificateArn })
+  site = await db.put('sites', { ...site, domainAttached: true, etag: res.etag })
+  return response('attached')
 }
 
 const prepareDistribution = async (site) => {
@@ -178,12 +221,20 @@ const prepareDistribution = async (site) => {
   logger.verbose('tenant distro created', tenant)
   site = await db.put('sites', { ...site, tenantId: tenant.Id, etag })
 
+  if (site.customDomain && !site.domainAttached) {
+    // wait for the certificate and attach it
+    until(({ state }) => state === 'attached')
+      .poll({ interval: 3000, timeout: 5 * 60 * 1000 }, async () => await attachDomain(site))
+  }
+  return site
+}
+
+const waitForDistribution = async (site, opts = {}) => {
+  // NOTE: we don't actually need to wait for the distribution to complete to complete promotion
   logger.info('waiting for distribution')
   await until(({ tenant }) => tenant.Status !== 'InProgress')
-    .poll(() => cfront.getTenant(site.tenantId))
+    .poll(opts, () => cfront.getTenant(site.tenantId))
     .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
-
-  return site
 }
 
 const trackDeploymentInProgress = async (site) => {
@@ -228,8 +279,7 @@ const deleteSite = async (siteId) => {
   // delete resources
   if (tenantId) {
     // disable first
-    const baseDomain = getSiteDomain(siteId)
-    const res = await cfront.updateTenant({ tenantId, baseDomain, siteId, enabled: false, etag })
+    const res = await cfront.disableTenant({ tenantId, etag })
     logger.info(`[${siteId}] disabled distribution tenant`)
     await cfront.deleteTenant({ tenantId, etag: res.etag })
     logger.info(`[${siteId}] deleted distribution tenant`)
@@ -253,6 +303,8 @@ const deleteSite = async (siteId) => {
 
   await cfront.deleteConfig(kvmKeys(site))
 
+  // TODO: delete all unattached certificates matching domain
+
   // delete site from db
   await db.delete('sites', { siteId })
   logger.info(`[${siteId}] deleted site`)
@@ -262,16 +314,18 @@ const deleteSite = async (siteId) => {
 // explicitly allow parameters to be returned
 const sanitize = (site, { showDeployKey } = {}) => {
   const {
-    siteId, name, customDomain, userId,
+    siteId, name, customDomain, domainAttached, userId,
     currentDeployment, deployedAt, createdAt, state,
-    deployKey, deployKeyCreatedAt, deployKeyLastUsedAt
-    // excluding:
-    // etag, gitInitialized, tenantId
+    deployKey, deployKeyCreatedAt, deployKeyLastUsedAt,
+    tenantId
+    // excluding: etag, gitInitialized
   } = site
   return {
     siteId,
     name,
-    customDomain,
+    // show the site as having a custom domain if it's been attached
+    // or there is no tenant yet
+    customDomain: customDomain && (!tenantId || domainAttached) ? customDomain : null,
     userId,
     currentDeployment,
     deployedAt,
@@ -292,7 +346,9 @@ module.exports = {
   get,
   update,
   setCustomDomain,
+  attachDomain,
   prepareDistribution,
+  waitForDistribution,
   trackDeploymentInProgress,
   trackDeploymentComplete,
   trackDeploymentFailed,
