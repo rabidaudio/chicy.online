@@ -40,7 +40,7 @@ module.exports = async function main (inArgv = process.argv) {
         chalk.bold('Deploy Key') + '\n' + chalk.dim(
         'When running non-interactively, such as during a CI ' +
         'build process, most commands can instead use a deploy key. A deploy key is generated ' +
-        'when a site is initialized. Set this value to the ' + chalk.bold('SC_DEPLOY_KEY') +
+        'when a site is initialized. Set this value to the ' + chalk.bold('CHICY_DEPLOY_KEY') +
         ' environment variable in your build environment to authenticate deployments and promotions.\n\n') +
 
         chalk.bold('Custom Domains') + '\n' + chalk.dim(
@@ -58,8 +58,8 @@ module.exports = async function main (inArgv = process.argv) {
       describe: 'The site subdomain, e.g. ' + chalk.bold('teeny-angle-dwas5')
     })
       .default('site', () => {
-        if (process.env.SC_SITE_ID) return process.env.SC_SITE_ID
-      }, '$SC_SITE_ID')
+        if (process.env.CHICY_SITE_ID) return process.env.CHICY_SITE_ID
+      }, '$CHICY_SITE_ID')
   }
 
   cli.command('init', chalk.bold('Create a new site.'), y =>
@@ -96,7 +96,7 @@ module.exports = async function main (inArgv = process.argv) {
         })
         .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))),
     cmd()
-      .use(authenticateDeployKeyOrUser)
+      .use(authenticateUser)
       .use(requestSite)
       .use(demandOption('site'))
       .use(resolveSite)
@@ -154,8 +154,8 @@ module.exports = async function main (inArgv = process.argv) {
         .positional('deployment', {
           describe: 'The ID of the deployment to promote, e.g. ' + chalk.bold('d_0000019cd5515615dd304c19') + '.'
         }).default('deployment', () => {
-          if (process.env.SC_DEPLOY_ID) return process.env.SC_DEPLOY_ID
-        }, '$SC_DEPLOY_ID')
+          if (process.env.CHICY_DEPLOY_ID) return process.env.CHICY_DEPLOY_ID
+        }, '$CHICY_DEPLOY_ID')
         .option('wait', { alias: 'w', describe: 'wait for the invalidation to complete', type: 'boolean' }),
     cmd()
       .use(authenticateDeployKeyOrUser)
@@ -206,9 +206,9 @@ module.exports = async function main (inArgv = process.argv) {
       normalize: true
     })
     .default('config', () => {
-      if (process.env.SC_CONFIG) return process.env.SC_CONFIG
+      if (process.env.CHICY_CONFIG) return process.env.CHICY_CONFIG
       return null
-    }, `$SC_CONFIG or ${Config.CONFIG_NAME}`)
+    }, `$CHICY_CONFIG or ${Config.CONFIG_NAME}`)
     .demandCommand(1, 1, 'command required')
     .strictCommands()
     .middleware(async (argv) => {
@@ -216,8 +216,9 @@ module.exports = async function main (inArgv = process.argv) {
       // dependencies that expect it
       logManger.configure({ level: argv.verbose ? 'verbose' : 'warn' })
       logger.verbose('arguments', argv)
-      argv.api = new Api(process.env.SC_HOSTNAME || API_HOST)
-      argv.deployKey = process.env.SC_DEPLOY_KEY
+      if (process.env.CHICY_HOSTNAME) logger.verbose(`Using alternate host: ${process.env.CHICY_HOSTNAME}`)
+      argv.api = new Api(process.env.CHICY_HOSTNAME || API_HOST)
+      argv.deployKey = process.env.CHICY_DEPLOY_KEY
 
       const configPath = argv.config
       const loadedConfig = await Config.findConfig(configPath)

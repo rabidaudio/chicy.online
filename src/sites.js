@@ -6,6 +6,7 @@ const logger = require('./logger').getLogger()
 
 const { generateDeployKey, obfuscateDeployKey } = require('./auth/deploy_keys')
 const { until } = require('./poll')
+const Config = require('./config')
 
 const cfront = require('./cfront')
 const db = require('./db')
@@ -138,7 +139,7 @@ const kvmKeys = (site) => {
 
 const writeConfig = async (site, config) => {
   // add the config to kvs
-  let { headers, rewriteRules } = config || {}
+  let { headers, rewriteRules } = Config.sanitize(config || {})
   headers ||= {}
   rewriteRules ||= []
   await cfront.writeConfig(kvmKeys(site), { headers, rewriteRules })
@@ -172,12 +173,12 @@ const setCustomDomain = async (site, newCustomDomain) => {
     return response(removingDomain ? 'cleared' : 'pending_deploy')
   }
 
-  if (site.currentDeployment) {
+  if (site.currentDeploymentId) {
     // if there's an active deployment, we need to update kvs to support the new domain
     if (removingDomain) {
       await cfront.deleteConfig([`config/${site.customDomain}`])
     } else {
-      const { config } = await db.get('deployments', { siteId, deploymentId: site.currentDeployment })
+      const { config } = await db.get('deployments', { siteId, deploymentId: site.currentDeploymentId })
       await writeConfig(site, config)
     }
   }
@@ -191,9 +192,14 @@ const setCustomDomain = async (site, newCustomDomain) => {
     site = await db.put('sites', { ...site, etag: res.etag, customDomain: newCustomDomain, domainAttached: false })
 
     // try attaching once to see if the cert is already available
-    const attachRes = await attachDomain(site)
-    site = attachRes.site
-    if (attachRes.state === 'attached') return response('attached')
+    try {
+      const attachRes = await attachDomain(site)
+      site = attachRes.site
+      if (attachRes.state === 'attached') return response('attached')
+    } catch (err) {
+      // if it fails it's probably because it hasn't validated yet.
+      logger.warn(`attachment failed: ${err.message}`)
+    }
     return response('pending_set')
   }
 }
@@ -264,7 +270,7 @@ const trackDeploymentComplete = async (site, deployment) => {
 
   return await db.put('sites', {
     ...site,
-    currentDeployment: deployment.deploymentId,
+    currentDeploymentId: deployment.deploymentId,
     deployedAt: new Date().toISOString(),
     state: 'deployed'
   })
@@ -330,7 +336,7 @@ const deleteSite = async (siteId) => {
 const sanitize = (site, { showDeployKey } = {}) => {
   const {
     siteId, name, customDomain, domainAttached, userId,
-    currentDeployment, deployedAt, createdAt, state,
+    currentDeploymentId, deployedAt, createdAt, state,
     deployKey, deployKeyCreatedAt, deployKeyLastUsedAt,
     tenantId
     // excluding: etag, gitInitialized
@@ -342,7 +348,7 @@ const sanitize = (site, { showDeployKey } = {}) => {
     // or there is no tenant yet
     customDomain: customDomain && (!tenantId || domainAttached) ? customDomain : null,
     userId,
-    currentDeployment,
+    currentDeploymentId,
     deployedAt,
     createdAt,
     state,

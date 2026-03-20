@@ -1,15 +1,25 @@
 {
-  "exclude": ["resources/**"],
-  "retain": ["resources/**"],
-  "headers": {
-    "Access-Control-Allow-Origin": "*"
-  },
-  "errorPages": {
-    "404": "/404.html"
-  },
-  "rewriteRules":  [
-    { "match": "^$", "replace": "/index.html", "last": true },
-    { "match": "^(.*?)/$", "replace": "${1}/index.html", "last": true },
-    { "match": "^(.*?)/([^.]+)$", "replace": "${1}/${2}/index.html", "last": true }
+  "exclude": [],
+  "retain": [],
+  "headers": {},
+  "rewriteRules": [
+    {
+      "match": "^$",
+      "replace": "/index.html",
+      "last": true,
+      "flags": ""
+    },
+    {
+      "match": "^(.*?)/$",
+      "replace": "${1}/index.html",
+      "last": true,
+      "flags": ""
+    },
+    {
+      "match": "^(.*?)/([^.]+)$",
+      "replace": "${1}/${2}/index.html",
+      "last": true,
+      "flags": ""
+    }
   ]
 }

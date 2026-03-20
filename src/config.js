@@ -90,13 +90,14 @@ const saveCommonConfig = async (dir = process.cwd()) => {
   if (existsSync(fullPath)) {
     return null
   }
-  fs.writeFile(fullPath, JSON.stringify(generateCommonConfig(), null, 2))
+  await fs.writeFile(fullPath, JSON.stringify(generateCommonConfig(), null, 2))
   return path.relative(process.cwd(), fullPath)
 }
 
 module.exports = {
   CONFIG_NAME,
   ConfigValidationError,
+  sanitize,
   findConfig,
   generateDefaultConfig,
   saveCommonConfig

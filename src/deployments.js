@@ -4,6 +4,7 @@ const logger = require('./logger').getLogger()
 
 const Sites = require('./sites')
 const Files = require('./files')
+const Config = require('./config')
 const { until } = require('./poll')
 
 const cfront = require('./cfront')
@@ -47,6 +48,8 @@ class InvalidStateError extends Error {}
 const create = async ({ site, message, config }) => {
   const { siteId } = site
   const deploymentId = generateDeploymentId()
+
+  config = Config.sanitize(config)
 
   const credentials = await sts.getTemporaryCredentials({
     path: Files.getTarballKey(siteId, deploymentId),
@@ -118,9 +121,9 @@ const process = async ({ tarballPath }) => {
 
 const list = async ({ site }) => {
   // TODO: pagination?
-  const { siteId, currentDeployment } = site
+  const { siteId, currentDeploymentId } = site
   const deployments = await db.query('deployments', { siteId }, { asc: false, limit: 100 })
-  return deployments.map(d => sanitize({ ...d, isLive: d.deploymentId === currentDeployment }))
+  return deployments.map(d => sanitize({ ...d, isLive: d.deploymentId === currentDeploymentId }))
 }
 
 const get = async ({ site, deploymentId }) => {
@@ -138,7 +141,7 @@ const requestPromotion = async ({ site, deploymentId }) => {
   if (!deployment) { throw new NotFoundError(`Deployment not found: ${siteId}/${deploymentId}`) }
   if (deployment.state === 'pending') { throw new InvalidStateError(`Deployment is still pending: ${siteId}/${deploymentId}`) }
 
-  if (site.currentDeployment === deploymentId) {
+  if (site.currentDeploymentId === deploymentId) {
     // already deployed, just check the status and return
     return { site, deployment: sanitize(deployment) }
   }
@@ -150,7 +153,7 @@ const requestPromotion = async ({ site, deploymentId }) => {
 }
 
 const invalidate = async (site, deployment) => {
-  if (!site.currentDeployment) return
+  if (!site.currentDeploymentId) return
   logger.info('invalidating cache')
   const invalidation = await cfront.invalidate(site.tenantId)
   deployment = await db.put('deployments', { ...deployment, state: 'deploying', invalidationId: invalidation.Id })

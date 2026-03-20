@@ -74,7 +74,7 @@ async function testSite (ctx) {
   expect(res.json.data.userId).to.equal(ctx.userId)
   expect(res.json.data.createdAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
   expect(res.json.data.state).to.equal('ready')
-  expect(res.json.data.currentDeployment).not.to.exist
+  expect(res.json.data.currentDeploymentId).not.to.exist
   expect(res.json.data.deployedAt).not.to.exist
   expect(res.json.data.deployKey).to.match(/^dk_[A-Za-z0-9-_]+$/)
   ctx.deployKey = res.json.data.deployKey
@@ -168,7 +168,7 @@ async function testDeploy (ctx) {
     expect(res.status).to.equal(200)
     expect(res.json.status).to.equal('OK')
     expect(res.json.data.state).to.equal('deployed')
-    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
+    expect(res.json.data.currentDeploymentId).to.equal(ctx.deploymentId1)
     expect(res.json.data.deployedAt).to.satisfy((d) => new Date(d).getTime() > 0, 'be an iso timestamp')
 
     if (!res.wasCached) {
@@ -221,7 +221,7 @@ async function testDeploy (ctx) {
     // check site status
     res = await api.GET(`/sites/${ctx.siteId}`)
     expect(res.status).to.equal(200)
-    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId2)
+    expect(res.json.data.currentDeploymentId).to.equal(ctx.deploymentId2)
 
     // re-promote existing deploy
     res = await api.POST(`/sites/${ctx.siteId}/deployments/${ctx.deploymentId2}/promote`)
@@ -242,7 +242,7 @@ async function testDeploy (ctx) {
     // check site status
     res = await api.GET(`/sites/${ctx.siteId}`)
     expect(res.status).to.equal(200)
-    expect(res.json.data.currentDeployment).to.equal(ctx.deploymentId1)
+    expect(res.json.data.currentDeploymentId).to.equal(ctx.deploymentId1)
   }
 }
 

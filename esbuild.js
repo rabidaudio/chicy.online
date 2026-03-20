@@ -41,6 +41,7 @@ function buildCli () {
     bundle: true,
     define: loadFromEnv('APP_NAME', 'BIN_NAME', 'API_HOST', 'SITE_DOMAIN', 'CONFIG_NAME'),
     minify: true,
+    sourcemap: true,
     platform: 'node',
     packages: 'external',
     target: ['node20.20'],

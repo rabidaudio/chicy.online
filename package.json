@@ -1,5 +1,5 @@
 {
-  "name": "chicy.online",
+  "name": "chicy",
   "version": "0.1.0",
   "description": "Easy and cheap static site hosting on AWS",
   "keywords": [
@@ -19,22 +19,23 @@
   "author": "Julien Dorothy, julien@rabidaudio.com",
   "type": "commonjs",
   "main": "dist/cli.js",
-  "bin": {
-    "chicy": "bin/cli"
-  },
+  "bin": "bin/cli",
   "directories": {
     "test": "tests"
   },
   "files": [
-    "dist",
+    "dist/cli.js",
+    "dist/cli.js.map",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "serve:local": "node src/local_server.js",
     "build": "node esbuild.js all",
-    "deploy": "dotenvx run -- serverless deploy",
-    "publish": "run-s build deploy",
+    "deploy:dev": "dotenvx run -- serverless deploy --stage dev",
+    "deploy:prod": "dotenvx run -- serverless deploy --stage prod",
+    "publish:dev": "run-s build deploy:dev",
+    "publish:prod": "run-s build deploy:prod",
     "lint": "standard --fix",
     "test:run": "node tests/index.js",
     "test": "run-s build test:run",

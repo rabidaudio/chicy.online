@@ -290,7 +290,7 @@ router.get('/sites/:siteId/deployments/:deploymentId', requireUserAuthOrDeployKe
 
 router.post('/sites/:siteId/deployments/:deploymentId/promote', requireUserAuthOrDeployKey, findSite, async (ctx) => {
   const deploymentId = ctx.params.deploymentId
-  if (ctx.site.currentDeployment === deploymentId) {
+  if (ctx.site.currentDeploymentId === deploymentId) {
     ctx.status = 202 // indicate that site is already live, nothing will happen
   }
 

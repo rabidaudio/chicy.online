@@ -37,7 +37,7 @@ async function init (argv) {
       "Be sure to save it, we'll only show it once."))
     console.log(chalk.bold('Deploy key: ') + deployKey)
   } else {
-    console.log(`SC_SITE_ID=${siteId} SC_DEPLOY_KEY=${deployKey}`)
+    console.log(`CHICY_SITE_ID=${siteId} CHICY_DEPLOY_KEY=${deployKey}`)
   }
   process.exit(0)
 }
@@ -59,13 +59,13 @@ async function showSites (argv) {
     }
   }
   showTable(sites.map(({
-    name, siteId, customDomain, state, currentDeployment, createdAt, deployedAt
+    name, siteId, customDomain, state, currentDeploymentId, createdAt, deployedAt
   }) => ({
     name: chalk.black(name),
     siteId: chalk.bold(siteId),
     state: colorizeState(state),
     domain: chalk.underline(customDomain || getSiteDomain(siteId)),
-    deployment: currentDeployment,
+    deployment: currentDeploymentId,
     created: isInteractive ? relativeTime(createdAt) : createdAt,
     published: isInteractive ? relativeTime(deployedAt) : deployedAt
   })))
@@ -116,12 +116,12 @@ async function configure (argv) {
   }
 
   if (isInteractive) {
-    if (site.currentDeployment) {
+    if (site.currentDeploymentId) {
       if (customDomain) {
         console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain) + '.')
       } else {
         console.log(chalk.green('Custom domain removed. ') +
-          'You can still access your site at ' + chalk.underline(getSiteDomain(argv.site)) + '.')
+          'You can still access your site at ' + chalk.underline('https://'+getSiteDomain(argv.site)) + '.')
       }
     } else {
       // not yet published
@@ -129,7 +129,7 @@ async function configure (argv) {
         console.log(chalk.green('Done. ') + 'When published, your site will be available at ' + chalk.underline(customDomain) + '.')
       } else {
         console.log(chalk.green('Custom domain removed. ') +
-        'You will still be able access your site at ' + chalk.underline(getSiteDomain(argv.site)) + '.')
+        'You will still be able access your site at ' + chalk.underline('https://'+getSiteDomain(argv.site)) + '.')
       }
     }
   } else {
@@ -159,7 +159,7 @@ async function regenerateKey (argv) {
     console.warn(chalk.gray("This deploy key can be used to deploy your site from a CI server. Be sure to save it, we'll only show it once."))
     console.log(chalk.bold('Deploy key: ') + deployKey)
   } else {
-    console.log(`SC_SITE_ID=${siteId} SC_DEPLOY_KEY=${deployKey}`)
+    console.log(`CHICY_SITE_ID=${siteId} CHICY_DEPLOY_KEY=${deployKey}`)
   }
   process.exit(0)
 }
@@ -258,11 +258,11 @@ async function promote (argv) {
     if (argv.wait) {
       argv.spinner.succeed(
         chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' is now live at ') +
-          chalk.underline(customDomain || getSiteDomain(siteId)) + chalk.green('.'))
+          chalk.underline('https://'+ (customDomain || getSiteDomain(siteId))) + chalk.green('.'))
     } else {
       argv.spinner.succeed(
         chalk.green('Deployment ') + chalk.bold(argv.deployment) + chalk.green(' should be live at ') +
-          chalk.underline(customDomain || getSiteDomain(siteId)) + chalk.green('soon.'))
+          chalk.underline('https://'+ (customDomain || getSiteDomain(siteId))) + chalk.green('soon.'))
       console.log('It may take a few minutes for the CDN to invalidate. You may also have to clear ' +
         'your browser cache.')
     }
