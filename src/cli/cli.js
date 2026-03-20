@@ -18,7 +18,8 @@ const {
 const {
   init, showSites, configure, regenerateKey,
   showDeployments, deploy, promote, removeSite,
-  authenticateUser, authenticateDeployKeyOrUser
+  authenticateUser, authenticateDeployKeyOrUser,
+  resolveSite
 } = require('./commands')
 
 // These are injected during esbuild
@@ -69,7 +70,12 @@ module.exports = async function main (inArgv = process.argv) {
     y.option('name', {
       alias: 'n',
       describe: 'A name for the site'
-    }), cmd()
+    }.option('generate-config', {
+      description: 'By default, `init` generates a template config file to use with the site ' +
+        "if one doesn't already exist. You can disable this with `--no-generate-config`",
+      type: 'boolean',
+      default: true
+    })), cmd()
     .use(authenticateUser)
     .use(requestOption('name', async () => {
       if (isInteractive) {
@@ -89,7 +95,6 @@ module.exports = async function main (inArgv = process.argv) {
         .option('domain', {
           alias: 'd',
           string: true,
-          boolean: true,
           describe: 'Add a custom domain to the site. Remove it by setting to blank or using `--no-domain`'
         })
         .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))),
@@ -97,6 +102,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
+      .use(resolveSite)
       .do(configure))
 
     .command('regenerate', chalk.bold('Generate a new deploy key.'), y =>
@@ -106,6 +112,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateUser)
       .use(requestSite)
       .use(demandOption('site'))
+      .use(resolveSite)
       .do(regenerateKey))
 
     .command('deployments', chalk.bold('list deployments for a site.'), y =>
@@ -115,6 +122,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
+      .use(resolveSite)
       .do(showDeployments))
 
     .command('deploy [path]', chalk.bold('Create a new deployment for the site.\n') +
@@ -139,6 +147,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
+      .use(resolveSite)
       .do(deploy))
 
     .command(['promote [deployment]', 'rollback [deployment]'], chalk.bold('Make a deployment live.'), y =>
@@ -154,6 +163,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateDeployKeyOrUser)
       .use(requestSite)
       .use(demandOption('site'))
+      .use(resolveSite)
       .use(requestOption('deployment', async (argv) => {
         if (isInteractive) {
           // TODO: get the site's deployments
@@ -185,6 +195,7 @@ module.exports = async function main (inArgv = process.argv) {
       .use(authenticateUser)
       .use(requestSite)
       .use(demandOption('site'))
+      .use(resolveSite)
       .do(removeSite))
 
     .help('help')

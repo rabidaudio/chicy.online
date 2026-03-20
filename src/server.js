@@ -100,8 +100,8 @@ const findSite = async (ctx, next) => {
   // make sure the user owns the site first
   ctx.site = await Sites.getUserSite(ctx.user.userId, ctx.params.siteId)
   if (!ctx.site || ctx.site.userId !== ctx.user.userId) {
-    ctx.status = 403
-    ctx.body = { status: 'ERROR', error: { message: 'Forbidden' } }
+    ctx.status = 404
+    ctx.body = { status: 'ERROR', error: { message: `Could not find site for user with id '${ctx.params.siteId}'` } }
     return
   }
   return await next()
@@ -212,9 +212,7 @@ const handleDomainValidationError = async (ctx, next) => {
       ctx.body = {
         status: 'ERROR',
         error: {
-          message: 'Domain validation failed. You must set a CNAME DNS record pointing your custom domain to ' +
-          `'${target}' before adding a custom domain. It may take a few minutes after creating the record ` +
-          'before the change is detected.',
+          message: err.fullMessage,
           reason: message,
           code,
           target,

@@ -1,7 +1,5 @@
 const winston = require('winston')
 
-const isInteractive = require('is-interactive').default()
-
 const errorFormatter = winston.format((info, _opts) => {
   if (info instanceof Error || info.stack) {
     return { ...info, message: (info.message || '') + '\n' + info.stack }
@@ -9,25 +7,35 @@ const errorFormatter = winston.format((info, _opts) => {
   return info
 })
 
-let formats = [
+const formats = [
+  winston.format.colorize({
+    level: true,
+    colors: {
+      error: 'bgRed',
+      warn: 'bgYellow',
+      info: 'blue',
+      http: 'gray',
+      verbose: 'magenta'
+    }
+  }),
   errorFormatter(),
   winston.format.simple()
 ]
-if (isInteractive) {
-  formats = [
-    winston.format.colorize({
-      level: true,
-      colors: {
-        error: 'bgRed',
-        warn: 'bgYellow',
-        info: 'blue',
-        http: 'gray',
-        verbose: 'magenta'
-      }
-    }),
-    ...formats
-  ]
-}
+// if (isInteractive) {
+//   formats = [
+//     winston.format.colorize({
+//       level: true,
+//       colors: {
+//         error: 'bgRed',
+//         warn: 'bgYellow',
+//         info: 'blue',
+//         http: 'gray',
+//         verbose: 'magenta'
+//       }
+//     }),
+//     ...formats
+//   ]
+// }
 
 const _logger = winston.createLogger({
   levels: winston.config.npm.levels,

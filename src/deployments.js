@@ -191,7 +191,7 @@ module.exports = {
       deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
 
       logger.info('updating site')
-      site = await Sites.trackDeployment(site, deployment)
+      site = await Sites.trackDeploymentComplete(site, deployment)
       return { site, deployment }
     } catch (err) {
       deployment = await db.put('deployments', { ...deployment, state: 'failed' })

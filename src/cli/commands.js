@@ -21,12 +21,14 @@ async function init (argv) {
   if (isInteractive) console.log(chalk.blue('Creating new site'))
   const { siteId, deployKey } = await argv.api.createSite({ name })
 
-  const configPath = await saveCommonConfig()
-  if (configPath) {
-    console.log(chalk.yellow('Created a config file at ') + chalk.dim(configPath) +
-      chalk.yellow(' with some sensible defaults. Use this to configure the deployment settings of your site.'))
-  } else if (isInteractive) {
-    console.log(chalk.yellow('Skipped creating a config file as one already exists.'))
+  if (argv.generateConfig) {
+    const configPath = await saveCommonConfig()
+    if (configPath) {
+      console.log(chalk.yellow('Created a config file at ') + chalk.dim(configPath) +
+        chalk.yellow(' with some sensible defaults. Use this to configure the deployment settings of your site.'))
+    } else if (isInteractive) {
+      console.log(chalk.yellow('Skipped creating a config file as one already exists.'))
+    }
   }
 
   if (isInteractive) {
@@ -61,41 +63,52 @@ async function showSites (argv) {
     created: isInteractive ? relativeTime(createdAt) : createdAt,
     published: isInteractive ? relativeTime(deployedAt) : deployedAt
   })))
+  process.exit(0)
 }
 
 async function configure (argv) {
-  try {
-    if (isInteractive) {
-      if (argv.domain) {
-        console.log(chalk.blue('Setting custom domain ') + chalk.bold(argv.domain) +
-          chalk.blue(' for site ') + chalk.bold(argv.site))
-      } else {
-        console.log(chalk.blue('Removing custom domain from') + chalk.bold(argv.site))
-      }
-    }
-
-    const { siteId, customDomain } = await argv.api.updateSite({ siteId: argv.site, customDomain: argv.domain })
-    if (isInteractive) {
-      if (customDomain) {
-        console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain))
-      } else {
-        console.log(chalk.green('Custom domain removed. ') +
-          'You can still access your site at ' + chalk.underline(getSiteDomain(siteId)))
-      }
-    }
-    process.exit(0)
-  } catch (err) {
-    if (err instanceof ApiError) {
-      console.warn(err.message)
-      process.exit(1)
+  if (isInteractive) {
+    if (argv.domain) {
+      console.log(chalk.blue('Setting custom domain ') + chalk.bold(argv.domain) +
+        chalk.blue(' for site ') + chalk.bold(argv.site))
+    } else {
+      console.log(chalk.blue('Removing custom domain from ') + chalk.bold(argv.site))
     }
   }
+
+  // TODO: client doesn't know what cloudfront domain to allow
+  // if (argv.domain) {
+  //   try {
+  //     logger.verbose(`verifying domain ${argv.domain}`)
+  //     await verifyCustomDomain(argv.site, argv.domain)
+  //   } catch (err) {
+  //     if (err instanceof DomainValidationFailedError) {
+  //       // logger.verbose('validation failed', err)
+  //       console.error(chalk.red(err.fullMessage))
+  //       process.exit(20)
+  //     }
+  //     throw err
+  //   }
+  // }
+
+  const { siteId, customDomain } = await argv.api.updateSite({ siteId: argv.site, customDomain: argv.domain })
+  if (isInteractive) {
+    if (customDomain) {
+      console.log(chalk.green('Your site is now available at ') + chalk.underline(customDomain))
+    } else {
+      console.log(chalk.green('Custom domain removed. ') +
+        'You can still access your site at ' + chalk.underline(getSiteDomain(siteId)))
+    }
+  } else {
+    console.log(argv.site)
+  }
+  process.exit(0)
 }
 
 async function regenerateKey (argv) {
   if (isInteractive) {
     console.log(chalk.blue('Regenerating deploy key for ') + chalk.bold(argv.site))
-    const { deployKey, deployKeyLastUsedAt } = await argv.api.getSite({ siteId: argv.site })
+    const { deployKey, deployKeyLastUsedAt } = argv.siteData
     const doIt = prompts.confirm({
       message: chalk.red('This will revoke deploy key ') + chalk.bold(deployKey) + (
         deployKeyLastUsedAt
@@ -116,6 +129,7 @@ async function regenerateKey (argv) {
   } else {
     console.log(`SC_SITE_ID=${siteId} SC_DEPLOY_KEY=${deployKey}`)
   }
+  process.exit(0)
 }
 
 async function showDeployments (argv) {
@@ -141,6 +155,7 @@ async function showDeployments (argv) {
     message,
     created: isInteractive ? relativeTime(createdAt) : createdAt
   })))
+  process.exit(0)
 }
 
 async function deploy (argv) {
@@ -215,6 +230,7 @@ async function promote (argv) {
     argv.spinner.stop()
     console.log(argv.deployment)
   }
+  process.exit(0)
 }
 
 async function removeSite (argv) {
@@ -291,6 +307,22 @@ const authenticateDeployKeyOrUser = async (argv, next) => {
   return await authenticateUser(argv, next)
 }
 
+const resolveSite = async (argv, next) => {
+  if (argv.site) {
+    try {
+      argv.siteData = await argv.api.getSite({ siteId: argv.site })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        console.error(chalk.red('Unable to find site ') + chalk.bold(argv.site) +
+          chalk.red(' in your account.'))
+        process.exit(1)
+      }
+      throw err
+    }
+  }
+  return await next()
+}
+
 module.exports = {
   init,
   showSites,
@@ -301,5 +333,6 @@ module.exports = {
   promote,
   removeSite,
   authenticateUser,
-  authenticateDeployKeyOrUser
+  authenticateDeployKeyOrUser,
+  resolveSite
 }

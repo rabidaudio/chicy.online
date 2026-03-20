@@ -17,5 +17,4 @@
   - sns topic for tracking deployment state
 - frontend
 - Custom deployments
-  - solution for env vars in cli - esbuild
-  - flag for private-only in sls to disable github logins
+  - flag for controlling enabled auth providers

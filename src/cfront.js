@@ -50,7 +50,7 @@ const tenantParams = ({ siteId, enabled, baseDomain, customDomain }) => {
   return params
 }
 
-module.exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
+const createTenant = async ({ siteId, baseDomain, customDomain }) => {
   const params = {
     ...tenantParams({ siteId, baseDomain, customDomain }),
     Name: siteId
@@ -60,29 +60,37 @@ module.exports.createTenant = async ({ siteId, baseDomain, customDomain }) => {
   return { tenant: DistributionTenant, etag: ETag }
 }
 
-module.exports.updateTenant = async ({ tenantId, siteId, enabled, baseDomain, customDomain, etag }) => {
-  const params = {
-    ...tenantParams({ siteId, enabled, baseDomain, customDomain }),
-    Id: tenantId,
-    IfMatch: etag
-  }
-  logger.http(`cloudfront: update tenant ${siteId}`, params)
-  const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand(params))
-  return { tenant: DistributionTenant, etag: ETag }
-}
-
-module.exports.getTenant = async (tenantId) => {
+const getTenant = async (tenantId) => {
   logger.http(`cloudfront: get tenant ${tenantId}`)
   const { DistributionTenant, ETag } = await cfClient.send(new GetDistributionTenantCommand({ Identifier: tenantId }))
   return { tenant: DistributionTenant, etag: ETag }
 }
 
-module.exports.deleteTenant = async ({ tenantId, etag }) => {
+const updateTenant = async ({ tenantId, siteId, enabled, baseDomain, customDomain, etag, attempted }) => {
+  try {
+    const params = {
+      ...tenantParams({ siteId, enabled, baseDomain, customDomain }),
+      Id: tenantId,
+      IfMatch: etag
+    }
+    logger.http(`cloudfront: update tenant ${siteId}`, params)
+    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand(params))
+    return { tenant: DistributionTenant, etag: ETag }
+  } catch (err) {
+    if (!attempted) {
+      // could be the etag is invalid. Try grabbing and trying again
+      const res = await getTenant(tenantId)
+      return await updateTenant({ tenantId, siteId, enabled, baseDomain, customDomain, etag: res.etag, attempted: true })
+    }
+  }
+}
+
+const deleteTenant = async ({ tenantId, etag }) => {
   logger.http(`cloudfront: delete tenant ${tenantId}`)
   await cfClient.send(new DeleteDistributionTenantCommand({ Id: tenantId, IfMatch: etag }))
 }
 
-module.exports.invalidate = async (distributionTenantId) => {
+const invalidate = async (distributionTenantId) => {
   const params = {
     Id: distributionTenantId,
     InvalidationBatch: {
@@ -98,7 +106,7 @@ module.exports.invalidate = async (distributionTenantId) => {
   return Invalidation
 }
 
-module.exports.getInvalidation = async (distributionTenantId, invalidationId) => {
+const getInvalidation = async (distributionTenantId, invalidationId) => {
   logger.http(`cloudfront: get invalidation ${distributionTenantId} ${invalidationId}`)
   const { Invalidation } = await cfClient.send(new GetInvalidationForDistributionTenantCommand({
     DistributionTenantId: distributionTenantId,
@@ -124,16 +132,27 @@ const updateKVS = async ({ puts, deletes, attempts }) => {
   }))
 }
 
-module.exports.writeConfig = async (keys, value) => {
+const writeConfig = async (keys, value) => {
   await updateKVS({
     puts: keys.map(k => ({ Key: k, Value: JSON.stringify(value) })),
     deletes: []
   })
 }
 
-module.exports.deleteConfig = async (keys) => {
+const deleteConfig = async (keys) => {
   await updateKVS({
     puts: [],
     deletes: keys.map(k => ({ Key: k }))
   })
+}
+
+module.exports = {
+  createTenant,
+  updateTenant,
+  getTenant,
+  deleteTenant,
+  invalidate,
+  getInvalidation,
+  writeConfig,
+  deleteConfig
 }

@@ -196,6 +196,14 @@ resources:
                 - cloudfront-keyvaluestore:DeleteKey
               Resource:
                 - Fn::GetAtt: [EdgeFunctionKeyValueStore, Arn]
+            - Effect: Allow
+              Action:
+                - acm:DeleteCertificate
+                - acm:DescribeCertificate
+                - acm:GetCertificate
+                - acm:RequestCertificate
+                - acm:ListCertificates
+              Resource: "*"
     # DynamoDB Tables
     AuthRequestsTable:
       Type: AWS::DynamoDB::Table

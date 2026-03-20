@@ -14,11 +14,19 @@ const r53 = require('./r53')
 const s3 = require('./s3')
 
 class DomainValidationFailedError extends Error {
-  constructor (message, options) {
-    super(message, options)
+  constructor (shortMessage, options) {
+    super(shortMessage, options)
     this.code = options.code
+    this.source = options.source
     this.target = options.target
     if (options.results) this.results = options.results
+  }
+
+  get fullMessage () {
+    return `Domain validation failed: ${this.message}.\n` +
+      `You must set a CNAME DNS record pointing your custom domain '${this.source}' to ` +
+      `'${this.target}' before adding a custom domain. It may take a few minutes after ` +
+      'creating the record before the change is detected.'
   }
 }
 
@@ -34,196 +42,221 @@ const generateSiteId = () => {
 
 const getSiteDomain = (siteId) => `${siteId}.${process.env.SITES_DOMAIN}`
 
-module.exports = {
-  DomainValidationFailedError,
-
-  getUserSite: async (userId, siteId) => {
-    const userSites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false, limit: 100 })
-    return userSites.find(s => s.siteId === siteId)
-  },
-
-  list: async (userId) => {
-    // TODO: pagination
-    const sites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false, limit: 100 })
-    return sites.map(s => sanitize(s))
-  },
-
-  // create a site. A site has a siteId which is
-  // a randomly generated subdomain like `estate-specify-07euk`,
-  // a deploy key used to authenticate deployments, a name,
-  // a userId which owns it.
-  create: async ({ name, userId, customDomain }) => {
-    const siteId = generateSiteId()
-    const siteDomain = getSiteDomain(siteId)
-    logger.info(`generating ${siteId}`)
-
-    if (customDomain) {
-      await this.verifyCustomDomain(siteId, customDomain)
+// Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
+// if not, return silently if verified
+const verifyCustomDomain = async (siteId, customDomain) => {
+  const target = getSiteDomain(siteId)
+  try {
+    logger.http(`dns: resolve ${customDomain} CNAME`)
+    const results = await dns.resolveCname(customDomain)
+    logger.http(`dns: resolved ${customDomain} CNAME`, results)
+    if (results.length === 0) {
+      throw new DomainValidationFailedError('record has no value', {
+        code: 'INVALID', source: customDomain, target
+      })
     }
-
-    await r53.createSubdomain(siteDomain)
-    const site = await db.put('sites', {
-      siteId,
-      userId,
-      name,
-      customDomain,
-      gitInitialized: false,
-      state: 'ready', // ready -> deploying -> deployed
-      createdAt: new Date().toISOString(),
-      ...generateDeployKey()
+    if (results[0] === target) return // ok
+    if (results[0] === process.env.DISTRIBUTION_DOMAIN) return // ok also
+    throw new DomainValidationFailedError('record has incorrect value', {
+      code: 'INVALID', source: customDomain, target, results
     })
-    return sanitize(site, { showDeployKey: true })
-  },
-
-  get: async (siteId) => {
-    const site = await db.get('sites', { siteId })
-    return sanitize(site)
-  },
-
-  update: async (site) => {
-    site = await db.put('sites', site)
-    return sanitize(site)
-  },
-
-  // Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
-  // if not, return silently if verified
-  verifyCustomDomain: async (siteId, customDomain) => {
-    const target = getSiteDomain(siteId)
-    try {
-      const results = await dns.resolveCname(customDomain)
-      if (results.length === 0) {
-        throw new DomainValidationFailedError('record has no value', { code: 'INVALID', target })
-      }
-      if (results[0] === target) return // ok
-      if (results[0] === process.env.DISTRIBUTION_DOMAIN) return // ok also
-      throw new DomainValidationFailedError('record has incorrect value', { code: 'INVALID', target, results })
-    } catch (err) {
-      if (err.code === 'ENOTFOUND') {
-        throw new DomainValidationFailedError('domain name has no records', { code: 'NOT_FOUND', target, cause: err })
-      }
-      if (err.code === 'ENODATA') {
-        throw new DomainValidationFailedError('domain name has non-CNAME records', { code: 'NOT_FOUND', target, cause: err })
-      }
-      throw new DomainValidationFailedError(err.message, { code: 'UNKNOWN', target, cause: err })
+  } catch (err) {
+    if (err.code === 'ENOTFOUND') {
+      throw new DomainValidationFailedError('domain name has no records', {
+        code: 'NOT_FOUND', source: customDomain, target, cause: err
+      })
     }
-  },
-
-  // add/remove custom domain
-  setCustomDomain: async (site, customDomain) => {
-    const { siteId, tenantId, etag } = site
-    if (customDomain) await this.verifyCustomDomain(siteId, customDomain)
-
-    // if distro exists, update it
-    if (tenantId) {
-      logger.info(`updating tenant ${siteId}: domain=${customDomain || 'default'}`)
-      const baseDomain = getSiteDomain(siteId)
-      const res = await cfront.updateTenant({ tenantId, siteId, baseDomain, customDomain, etag })
-      site.etag = res.etag
+    if (err.code === 'ENODATA') {
+      throw new DomainValidationFailedError('domain name has non-CNAME records', {
+        code: 'NOT_FOUND', source: customDomain, target, cause: err
+      })
     }
-    // otherwise will set on first deploy
-
-    site = await db.put('sites', { ...site, customDomain })
-    return sanitize(site)
-  },
-
-  prepareDistribution: async (site) => {
-    if (site.tenantId) return site
-
-    // create the distribution
-    logger.info('creating distro tenant')
-    const { siteId, customDomain } = site
-    const baseDomain = getSiteDomain(siteId)
-    const { tenant, etag } = await cfront.createTenant({ siteId, customDomain, baseDomain })
-    logger.verbose('tenant distro created', tenant)
-    site = await db.put('sites', { ...site, tenantId: tenant.Id, etag })
-
-    logger.info('waiting for distribution')
-    await until(({ tenant }) => tenant.Status !== 'InProgress')
-      .poll(() => cfront.getTenant(site.tenantId))
-      .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
-
-    return site
-  },
-
-  trackDeploymentInProgress: async (site) => {
-    return await db.put('sites', {
-      ...site,
-      state: 'deploying'
+    throw new DomainValidationFailedError(err.message, {
+      code: 'UNKNOWN', source: customDomain, target, cause: err
     })
-  },
-
-  trackDeployment: async (site, deployment) => {
-    // add the config to kvs
-    const keys = [`config/${getSiteDomain(site.siteId)}`]
-    if (site.customDomain) keys.push(`config/${site.customDomain}`)
-    let { headers, rewriteRules } = deployment.config || {}
-    headers ||= {}
-    rewriteRules ||= []
-    await cfront.writeConfig(keys, { headers, rewriteRules })
-
-    return await db.put('sites', {
-      ...site,
-      currentDeployment: deployment.deploymentId,
-      deployedAt: new Date().toISOString(),
-      state: 'deployed'
-    })
-  },
-
-  trackDeploymentFailed: async (site, reason) => {
-    return await db.put('sites', {
-      ...site,
-      state: 'failed',
-      reason
-    })
-  },
-
-  regenerateDeployKey: async (site) => {
-    site = await db.put('sites', {
-      ...site,
-      ...generateDeployKey()
-    })
-    return sanitize(site, { showDeployKey: true })
-  },
-
-  delete: async (siteId) => {
-    logger.warn(`deleting site ${siteId}`)
-    const { tenantId, etag, customDomain } = await db.get('sites', { siteId })
-
-    // delete resources
-    if (tenantId) {
-      // disable first
-      const baseDomain = getSiteDomain(siteId)
-      const res = await cfront.updateTenant({ tenantId, baseDomain, siteId, enabled: false, etag })
-      logger.info(`[${siteId}] disabled distribution tenant`)
-      await cfront.deleteTenant({ tenantId, etag: res.etag })
-      logger.info(`[${siteId}] deleted distribution tenant`)
-    }
-
-    await r53.deleteSubdomain(getSiteDomain(siteId))
-    logger.info(`[${siteId}] deleted subdomain route`)
-
-    // delete data from S3
-    await s3.deleteRecursive(git.getSiteContentKey(siteId))
-    logger.info(`[${siteId}] deleted site content`)
-    await s3.deleteRecursive(git.getSiteDeploymentsKey(siteId))
-    logger.info(`[${siteId}] deleted deployment data`)
-
-    // delete all deployments from db
-    for (const { deploymentId } in await db.scan('deployments', { siteId })) {
-      logger.info(`deleting ${siteId}/${deploymentId}`)
-      await db.delete('deployments', { siteId, deploymentId })
-    }
-    logger.info(`[${siteId}] deleted deployment history`)
-
-    const keys = [`config/${getSiteDomain(siteId)}`]
-    if (customDomain) keys.push(`config/${customDomain}`)
-    await cfront.deleteConfig(keys)
-
-    // delete site from db
-    await db.delete('sites', { siteId })
-    logger.info(`[${siteId}] deleted site`)
-    logger.info(`site deleted: ${siteId}`)
   }
+}
+
+const getUserSite = async (userId, siteId) => {
+  const userSites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false, limit: 100 })
+  return userSites.find(s => s.siteId === siteId)
+}
+
+const list = async (userId) => {
+  // TODO: pagination
+  const sites = await db.query('sites', { userId }, { idx: 'idxUserId', asc: false, limit: 100 })
+  return sites.map(s => sanitize(s))
+}
+
+// create a site. A site has a siteId which is
+// a randomly generated subdomain like `estate-specify-07euk`,
+// a deploy key used to authenticate deployments, a name,
+// a userId which owns it.
+const create = async ({ name, userId, customDomain }) => {
+  const siteId = generateSiteId()
+  const siteDomain = getSiteDomain(siteId)
+  logger.info(`generating ${siteId}`)
+
+  if (customDomain) {
+    await this.verifyCustomDomain(siteId, customDomain)
+  }
+
+  await r53.createSubdomain(siteDomain)
+  const site = await db.put('sites', {
+    siteId,
+    userId,
+    name,
+    customDomain,
+    gitInitialized: false,
+    state: 'ready', // ready -> deploying -> deployed
+    createdAt: new Date().toISOString(),
+    ...generateDeployKey()
+  })
+  return sanitize(site, { showDeployKey: true })
+}
+
+const get = async (siteId) => {
+  const site = await db.get('sites', { siteId })
+  return sanitize(site)
+}
+
+const update = async (site) => {
+  site = await db.put('sites', site)
+  return sanitize(site)
+}
+
+const kvmKeys = (site) => {
+  const keys = [`config/${getSiteDomain(site.siteId)}`]
+  if (site.customDomain) keys.push(`config/${site.customDomain}`)
+  return keys
+}
+
+const writeConfig = async (site, config) => {
+  // add the config to kvs
+  let { headers, rewriteRules } = config || {}
+  headers ||= {}
+  rewriteRules ||= []
+  await cfront.writeConfig(kvmKeys(site), { headers, rewriteRules })
+}
+
+// add/remove custom domain
+const setCustomDomain = async (site, customDomain) => {
+  const { siteId, tenantId, etag } = site
+  if (customDomain) await verifyCustomDomain(siteId, customDomain)
+
+  // if distro exists, update it
+  if (tenantId) {
+    logger.info(`updating tenant ${siteId}: domain=${customDomain || 'default'}`)
+    const baseDomain = getSiteDomain(siteId)
+    const res = await cfront.updateTenant({ tenantId, siteId, baseDomain, customDomain, etag })
+    site.etag = res.etag
+  }
+  // otherwise will set on first deploy
+
+  // if currentDeployment exists, get it's config and populate for the custom domain
+  if (site.currentDeployment) {
+    if (customDomain) {
+      const { config } = await db.get('deployments', { siteId, deploymentId: site.currentDeployment })
+      await writeConfig(site, config)
+    } else {
+      await cfront.deleteConfig([`config/${customDomain}`])
+    }
+  }
+
+  site = await db.put('sites', { ...site, customDomain })
+  return sanitize(site)
+}
+
+const prepareDistribution = async (site) => {
+  if (site.tenantId) return site
+
+  // create the distribution
+  logger.info('creating distro tenant')
+  const { siteId, customDomain } = site
+  const baseDomain = getSiteDomain(siteId)
+  const { tenant, etag } = await cfront.createTenant({ siteId, customDomain, baseDomain })
+  logger.verbose('tenant distro created', tenant)
+  site = await db.put('sites', { ...site, tenantId: tenant.Id, etag })
+
+  logger.info('waiting for distribution')
+  await until(({ tenant }) => tenant.Status !== 'InProgress')
+    .poll(() => cfront.getTenant(site.tenantId))
+    .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
+
+  return site
+}
+
+const trackDeploymentInProgress = async (site) => {
+  return await db.put('sites', {
+    ...site,
+    state: 'deploying'
+  })
+}
+
+const trackDeploymentComplete = async (site, deployment) => {
+  await writeConfig(site, deployment.config)
+
+  return await db.put('sites', {
+    ...site,
+    currentDeployment: deployment.deploymentId,
+    deployedAt: new Date().toISOString(),
+    state: 'deployed'
+  })
+}
+
+const trackDeploymentFailed = async (site, reason) => {
+  return await db.put('sites', {
+    ...site,
+    state: 'failed',
+    reason
+  })
+}
+
+const regenerateDeployKey = async (site) => {
+  site = await db.put('sites', {
+    ...site,
+    ...generateDeployKey()
+  })
+  return sanitize(site, { showDeployKey: true })
+}
+
+const deleteSite = async (siteId) => {
+  logger.warn(`deleting site ${siteId}`)
+  const site = await db.get('sites', { siteId })
+  const { tenantId, etag } = site
+
+  // delete resources
+  if (tenantId) {
+    // disable first
+    const baseDomain = getSiteDomain(siteId)
+    const res = await cfront.updateTenant({ tenantId, baseDomain, siteId, enabled: false, etag })
+    logger.info(`[${siteId}] disabled distribution tenant`)
+    await cfront.deleteTenant({ tenantId, etag: res.etag })
+    logger.info(`[${siteId}] deleted distribution tenant`)
+  }
+
+  await r53.deleteSubdomain(getSiteDomain(siteId))
+  logger.info(`[${siteId}] deleted subdomain route`)
+
+  // delete data from S3
+  await s3.deleteRecursive(git.getSiteContentKey(siteId))
+  logger.info(`[${siteId}] deleted site content`)
+  await s3.deleteRecursive(git.getSiteDeploymentsKey(siteId))
+  logger.info(`[${siteId}] deleted deployment data`)
+
+  // delete all deployments from db
+  for (const { deploymentId } in await db.scan('deployments', { siteId })) {
+    logger.info(`deleting ${siteId}/${deploymentId}`)
+    await db.delete('deployments', { siteId, deploymentId })
+  }
+  logger.info(`[${siteId}] deleted deployment history`)
+
+  await cfront.deleteConfig(kvmKeys(site))
+
+  // delete site from db
+  await db.delete('sites', { siteId })
+  logger.info(`[${siteId}] deleted site`)
+  logger.info(`site deleted: ${siteId}`)
 }
 
 // explicitly allow parameters to be returned
@@ -248,4 +281,21 @@ const sanitize = (site, { showDeployKey } = {}) => {
     deployKeyLastUsedAt,
     deployKey: (showDeployKey ? deployKey : obfuscateDeployKey(deployKey))
   }
+}
+
+module.exports = {
+  DomainValidationFailedError,
+  verifyCustomDomain,
+  getUserSite,
+  list,
+  create,
+  get,
+  update,
+  setCustomDomain,
+  prepareDistribution,
+  trackDeploymentInProgress,
+  trackDeploymentComplete,
+  trackDeploymentFailed,
+  regenerateDeployKey,
+  delete: deleteSite
 }

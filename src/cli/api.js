@@ -3,8 +3,9 @@ const { until } = require('../poll')
 const logger = require('../logger').getLogger()
 
 class ApiError extends Error {
-  constructor (data, opts = {}) {
+  constructor (res, data, opts = {}) {
     super(data.message, opts)
+    this.status = res.status
     this.data = data
   }
 }
@@ -25,7 +26,7 @@ class Api {
     if (res.status >= 400) {
       if (res.headers.get('content-type').match(/^application\/json/)) {
         const data = await res.json()
-        throw new ApiError(data)
+        throw new ApiError(res, data)
       } else {
         throw new Error('Unknown server error')
       }
