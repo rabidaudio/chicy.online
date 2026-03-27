@@ -9,7 +9,7 @@ const { Upload } = require('@aws-sdk/lib-storage')
 
 const logger = require('./logger').getLogger()
 
-const client = new S3Client()
+const client = new S3Client({ region: 'us-east-1' })
 
 const APP_BUCKET = process.env.APP_BUCKET_NAME
 
