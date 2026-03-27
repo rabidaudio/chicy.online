@@ -11,10 +11,11 @@ const Config = require('../config')
 const { Api } = require('./api')
 const {
   BIN_NAME, APP_NAME, API_HOST,
-  isInteractive,
   getSiteDomain, relativeTime,
   cmd, demandOption, requestOption
 } = require('./utils')
+
+const { isInteractive } = require('./display')
 
 const {
   init, showSites, configure, regenerateKey,

@@ -16,6 +16,8 @@
   - sns topic for tracking deployment/promotion logs
   - multiple custom domains
     - array on site, since limit is 4
+- admin cli
+  - migrations
 - frontend
 - Custom deployments
   - flag for controlling enabled auth providers

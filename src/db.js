@@ -14,11 +14,9 @@ const logger = require('./logger').getLogger()
 const client = new DynamoDBClient()
 const docClient = DynamoDBDocumentClient.from(client)
 
-const tablePrefix = process.env.TABLE_PREFIX
-
 module.exports.put = async (table, data) => {
   const command = new PutCommand({
-    TableName: `${tablePrefix}-${table}`,
+    TableName: `${process.env.TABLE_PREFIX}-${table}`,
     Item: data
   })
   logger.http(`dynamo: put ${table}`)
@@ -28,7 +26,7 @@ module.exports.put = async (table, data) => {
 
 module.exports.get = async (table, keys) => {
   const command = new GetCommand({
-    TableName: `${tablePrefix}-${table}`,
+    TableName: `${process.env.TABLE_PREFIX}-${table}`,
     Key: keys // e.g. { userId }
   })
   try {
@@ -50,7 +48,7 @@ module.exports.get = async (table, keys) => {
 module.exports.query = async (table, partition, { asc, idx, limit } = {}) => {
   const [partitionKey, partitionValue] = Object.entries(partition)[0]
   const params = {
-    TableName: `${tablePrefix}-${table}`,
+    TableName: `${process.env.TABLE_PREFIX}-${table}`,
     ScanIndexForward: asc || false,
     ExpressionAttributeValues: {
       ':v1': partitionValue
@@ -71,7 +69,7 @@ module.exports.scan = async function * (table, filters = {}) {
   let startKey
   const filterExpressions = []
   const params = {
-    TableName: `${tablePrefix}-${table}`
+    TableName: `${process.env.TABLE_PREFIX}-${table}`
   }
   const filterEntries = Object.entries(filters)
   if (filterEntries.length > 0) {
@@ -101,7 +99,7 @@ module.exports.delete = async (table, keys) => {
   try {
     logger.http(`dynamo: delete ${table}`, keys)
     await docClient.send(new DeleteCommand({
-      TableName: `${tablePrefix}-${table}`,
+      TableName: `${process.env.TABLE_PREFIX}-${table}`,
       Key: keys // e.g. { siteId, deploymentId }
     }))
   } catch (err) {

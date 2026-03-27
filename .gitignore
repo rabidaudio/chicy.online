@@ -6,3 +6,6 @@ test.tar.gz
 .DS_Store
 tests/_fixtures
 dist/
+
+sls-dev.env
+sls-prod.env

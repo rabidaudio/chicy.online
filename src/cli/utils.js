@@ -1,5 +1,3 @@
-const consoleTablePrinter = require('console-table-printer')
-const CliTable = require('cli-table3')
 const moment = require('moment')
 
 // These are injected during esbuild
@@ -8,8 +6,6 @@ const APP_NAME = process.env.APP_NAME
 const API_HOST = process.env.API_HOST
 const SITE_DOMAIN = process.env.SITE_DOMAIN
 if (!BIN_NAME || !APP_NAME || !API_HOST || !SITE_DOMAIN) throw new Error('Configuration missing')
-
-const isInteractive = require('is-interactive').default()
 
 const getSiteDomain = (siteId) => `${siteId}.${SITE_DOMAIN}`
 
@@ -50,45 +46,13 @@ const requestOption = (option, requestFn) => async (argv, next) => {
   return await next()
 }
 
-const showTable = (data) => {
-  if (isInteractive) {
-    consoleTablePrinter.printTable(data)
-  } else {
-    const table = new CliTable({
-      chars: {
-        top: '',
-        'top-mid': '',
-        'top-left': '',
-        'top-right': '',
-        bottom: '',
-        'bottom-mid': '',
-        'bottom-left': '',
-        'bottom-right': '',
-        left: '',
-        'left-mid': '',
-        mid: '',
-        'mid-mid': '',
-        right: '',
-        'right-mid': '',
-        middle: '  '
-      },
-      style: { 'padding-left': 0, 'padding-right': 0 }
-    })
-    if (data[0]) table.push(Object.keys(data[0]).map(k => k.toUpperCase()))
-    table.push(...data.map(d => Object.values(d)))
-    console.log(table.toString())
-  }
-}
-
 module.exports = {
   BIN_NAME,
   APP_NAME,
   API_HOST,
   SITE_DOMAIN,
-  isInteractive,
   relativeTime,
   getSiteDomain,
-  showTable,
   cmd,
   demandOption,
   requestOption
