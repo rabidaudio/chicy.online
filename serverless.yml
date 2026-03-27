@@ -438,7 +438,10 @@ resources:
     EdgeFunction:
       Type: AWS::CloudFront::Function
       Properties:
-        Name: ${param:appId}-edgeFn
+        # NOTE: auto-publish will set the function live at create but not update
+        # the code if it changes. By appending a hash of the function code to
+        # the end of the name, we force a re-create of the function.
+        Name: ${param:appId}-edgeFn-${file(read_edge.js):hash}
         AutoPublish: true
         FunctionCode: ${file(read_edge.js):content}
         FunctionConfig:

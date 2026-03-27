@@ -146,7 +146,7 @@ const requestPromotion = async ({ site, deploymentId }) => {
     return { site, deployment: sanitize(deployment) }
   }
 
-  site = await Sites.trackDeploymentInProgress(site)
+  site = await Sites.trackPromotionInProgress(site)
 
   await Files.triggerPromotion({ siteId, deploymentId })
   return { site, deployment: sanitize(deployment) }
@@ -199,13 +199,13 @@ const promote = async ({ promoteKey }) => {
     deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
 
     logger.info('updating site')
-    site = await Sites.trackDeploymentComplete(site, deployment)
+    site = await Sites.trackPromotionComplete(site, deployment)
 
     return { site, deployment }
   } catch (err) {
     console.error('promote failed. saving state', err)
     deployment = await db.put('deployments', { ...deployment, state: 'failed' })
-    site = await Sites.trackDeploymentFailed(site, err.message)
+    site = await Sites.trackPromotionFailed(site, err.message)
     throw err
   }
 }

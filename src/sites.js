@@ -258,7 +258,7 @@ const waitForDistribution = async (site, opts = {}) => {
     .then(({ tenant }) => console.info(`distribution status: ${tenant.Status}`))
 }
 
-const trackDeploymentInProgress = async (site) => {
+const trackPromotionInProgress = async (site) => {
   site = await db.put('sites', {
     ...site,
     state: 'deploying'
@@ -266,7 +266,7 @@ const trackDeploymentInProgress = async (site) => {
   return sanitize(site)
 }
 
-const trackDeploymentComplete = async (site, deployment) => {
+const trackPromotionComplete = async (site, deployment) => {
   await writeConfig(site, deployment.config)
 
   return await db.put('sites', {
@@ -277,7 +277,7 @@ const trackDeploymentComplete = async (site, deployment) => {
   })
 }
 
-const trackDeploymentFailed = async (site, reason) => {
+const trackPromotionFailed = async (site, reason) => {
   return await db.put('sites', {
     ...site,
     state: 'failed',
@@ -372,9 +372,9 @@ module.exports = {
   attachDomain,
   prepareDistribution,
   waitForDistribution,
-  trackDeploymentInProgress,
-  trackDeploymentComplete,
-  trackDeploymentFailed,
+  trackPromotionInProgress,
+  trackPromotionComplete,
+  trackPromotionFailed,
   regenerateDeployKey,
   delete: deleteSite
 }
