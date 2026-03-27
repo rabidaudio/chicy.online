@@ -5,4 +5,6 @@ const path = require('node:path')
 const projectRoot = __dirname
 
 execSync('npm run build', { cwd: projectRoot })
-module.exports.content = fs.readFileSync(path.join(projectRoot, 'dist/edge_handler.js')).toString('utf8')
+
+const content = fs.readFileSync(path.join(projectRoot, 'dist/edge_handler.js')).toString('utf8')
+module.exports.content = content

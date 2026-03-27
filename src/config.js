@@ -27,9 +27,9 @@ const generateCommonConfig = () => sanitize({
   rewriteRules: [
     { match: '^$', replace: '/index.html', last: true },
     /* eslint-disable-next-line no-template-curly-in-string */
-    // { match: '^(.*?)/$', replace: '${1}/index.html', last: true },
+    { match: '^(.*?)/$', replace: '${1}/index.html', last: true },
     /* eslint-disable-next-line no-template-curly-in-string */
-    // { match: '^(.*?)/([^.]+)$', replace: '${1}/${2}/index.html', last: true }
+    { match: '^(.*?)/([^.]+)$', replace: '${1}/${2}/index.html', last: true }
   ]
 })
 

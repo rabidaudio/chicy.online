@@ -4,6 +4,7 @@
 - refactor state machines to be a lot more explicit and well defined
   - rename site ready to unpublished
 - new features
+  - infer site from config file
   - rename sites
   - user caps
   - error pages

@@ -45,7 +45,7 @@ function createPathRewriter (config) {
       if (!matches) continue
       path = matcher.replace
       for (var j = 0; j < matches.length; j++) {
-        var tag = '${' + j.toString() + '}'
+        var tag = ['$', '{', j.toString(), '}'].join('')
         console.log(`replace ${j}: '${tag}' with '${matches[j]}'`)
         path = path.replaceAll(tag, matches[j])
       }
