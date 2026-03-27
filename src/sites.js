@@ -73,9 +73,9 @@ const verifyCustomDomain = async (customDomain, allowed) => {
     if (err.code === 'ENODATA') {
       // see if the A records match
       try {
-        const targetIps = (await dns.resolve4(allowed[0])).sort().join(",")
+        const targetIps = (await dns.resolve4(allowed[0])).sort().join(',')
         if (targetIps.length > 0) {
-          const sourceIps = (await dns.resolve4(customDomain)).sort().join(",")
+          const sourceIps = (await dns.resolve4(customDomain)).sort().join(',')
           if (targetIps === sourceIps) {
             logger.info(`Found a match on A record instead: ${sourceIps}`)
             return // ok
@@ -83,7 +83,7 @@ const verifyCustomDomain = async (customDomain, allowed) => {
         }
       } catch {
         // just return the original error
-        logger.verbose("a records did not match")
+        logger.verbose('a records did not match')
       }
 
       throw new DomainValidationFailedError('domain name has non-CNAME records', {

@@ -28,7 +28,7 @@ module.exports = async function main (inArgv = process.argv) {
     .scriptName(BIN_NAME)
 
     .usage(`${chalk.bold('$0')}   ` +
-        chalk.green('Create and deploy static sites on', chalk.underline(APP_NAME) + '.\n\n') +
+        chalk.green('Create and deploy static sites with', chalk.underline(APP_NAME) + '.\n\n') +
 
         chalk.black('  $0 init\n') +
         chalk.black('  $0 deploy myapp/dist --promote --wait\n\n') +
@@ -210,7 +210,9 @@ module.exports = async function main (inArgv = process.argv) {
     .help('help')
     .command('help', false, (y) => y, (argv) => { cli.showHelp() })
     .alias('help', 'h')
-    .option('verbose', { alias: 'v', describe: 'verbose logging' })
+    .option('verbose', {
+      alias: 'v', type: 'count', describe: 'Increase logging verbosity. More flags means more verbose, e.g. ' + chalk.italic('-vvv')
+    })
     .option('config', {
       alias: 'c',
       describe: `Path to a "${Config.CONFIG_NAME}" config file to use.`,
@@ -223,9 +225,8 @@ module.exports = async function main (inArgv = process.argv) {
     .demandCommand(1, 1, 'command required')
     .strictCommands()
     .middleware(async (argv) => {
-      // We do this here because we need to figure out verobsity level before importing logger and any
-      // dependencies that expect it
-      logManger.configure({ level: argv.verbose ? 'verbose' : 'warn' })
+      const level = Object.keys(logger.levels)[1 + argv.verbose]
+      logManger.configure({ level })
       logger.verbose('arguments', argv)
       if (process.env.CHICY_HOSTNAME) logger.verbose(`Using alternate host: ${process.env.CHICY_HOSTNAME}`)
       argv.api = new Api(process.env.CHICY_HOSTNAME || API_HOST)
