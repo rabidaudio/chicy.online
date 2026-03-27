@@ -6,6 +6,6 @@ A multi-tenant static site host. Sites are stored in S3 buckets and served via C
 npm install -g chicy.online
 
 chicy init # login with Github and create a site
-chicy deploy --promote --wait path/to/dist # publish data
+chicy deploy path/to/dist --promote --wait # publish data
 chicy configure --domain mydomain.com # set up a custom domain
 ```

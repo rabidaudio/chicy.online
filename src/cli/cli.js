@@ -97,7 +97,7 @@ module.exports = async function main (inArgv = process.argv) {
         })
         .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg)))
         .option('skip-verify', {
-          describe: 'do not ask for confirmation before deleting',
+          describe: 'do not check that the DNS records are set properly before setting domain',
           type: 'boolean',
           default: false
         }),
