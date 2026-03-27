@@ -219,6 +219,7 @@ async function deploy (argv) {
   argv.spinner.text = 'Uploading...'
   const tarball = await Files.createTarball(argv.path, { exclude: allExcludes })
   await s3.upload(uploadPath, tarball, {
+    region: 'us-east-1',
     credentials,
     progress: ({ loaded }) => { argv.spinner.text = `Uploading... ${prettyBytes(loaded)}` }
   })

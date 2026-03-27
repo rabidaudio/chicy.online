@@ -9,11 +9,11 @@ const { Upload } = require('@aws-sdk/lib-storage')
 
 const logger = require('./logger').getLogger()
 
-const client = new S3Client({ region: 'us-east-1' })
+const client = new S3Client()
 
 const APP_BUCKET = process.env.APP_BUCKET_NAME
 
-module.exports.upload = async (path, file, { bucket, contentType, credentials, progress } = {}) => {
+module.exports.upload = async (path, file, { bucket, contentType, region, credentials, progress } = {}) => {
   bucket ||= APP_BUCKET
   let key = path
   try {
@@ -29,7 +29,7 @@ module.exports.upload = async (path, file, { bucket, contentType, credentials, p
     Body: file
   }
   if (contentType) params.ContentType = contentType
-  const s3client = credentials ? new S3Client({ credentials }) : client
+  const s3client = credentials ? new S3Client({ region, credentials }) : client
   logger.verbose(`s3: upload s3://${bucket}/${key}`)
 
   const task = new Upload({ client: s3client, params })

@@ -1,6 +1,5 @@
 # TODO
 
-- fix undefined aws region bug when pushing to s3
 - refactor state machines to be a lot more explicit and well defined
   - rename site ready to unpublished
 - new features
