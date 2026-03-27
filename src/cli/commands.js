@@ -84,10 +84,10 @@ async function configure (argv) {
   }
 
   // TODO: client doesn't know what cloudfront domain to allow
-  if (customDomain) {
+  if (customDomain && !argv.skipVerify) {
     try {
       logger.verbose(`verifying domain ${customDomain}`)
-      await verifyCustomDomain(argv.site, customDomain, [getSiteDomain(argv.site)])
+      await verifyCustomDomain(customDomain, [getSiteDomain(argv.site)])
     } catch (err) {
       if (err instanceof DomainValidationFailedError) {
         console.error(chalk.red(err.fullMessage))

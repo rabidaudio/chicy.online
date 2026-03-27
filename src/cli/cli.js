@@ -94,7 +94,12 @@ module.exports = async function main (inArgv = process.argv) {
           describe: 'Add a custom domain to the site. Remove it by setting to blank or using ' +
             chalk.dim('--no-domain')
         })
-        .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg))),
+        .coerce('domain', (arg) => (typeof arg === 'boolean' ? null : (arg === '' ? null : arg)))
+        .option('skip-verify', {
+          describe: 'do not ask for confirmation before deleting',
+          type: 'boolean',
+          default: false
+        }),
     cmd()
       .use(authenticateUser)
       .use(requestSite)

@@ -48,7 +48,7 @@ const getSiteDomain = (siteId) => `${siteId}.${process.env.SITES_DOMAIN}`
 
 // Check if the customDomain is pointing correctly. Will throw a DomainValidationFailedError
 // if not, return silently if verified
-const verifyCustomDomain = async (siteId, customDomain, allowed) => {
+const verifyCustomDomain = async (customDomain, allowed) => {
   try {
     logger.http(`dns: resolve ${customDomain} CNAME`)
     const results = await dns.resolveCname(customDomain)
@@ -71,6 +71,21 @@ const verifyCustomDomain = async (siteId, customDomain, allowed) => {
       })
     }
     if (err.code === 'ENODATA') {
+      // see if the A records match
+      try {
+        const targetIps = (await dns.resolve4(allowed[0])).sort().join(",")
+        if (targetIps.length > 0) {
+          const sourceIps = (await dns.resolve4(customDomain)).sort().join(",")
+          if (targetIps === sourceIps) {
+            logger.info(`Found a match on A record instead: ${sourceIps}`)
+            return // ok
+          }
+        }
+      } catch {
+        // just return the original error
+        logger.verbose("a records did not match")
+      }
+
       throw new DomainValidationFailedError('domain name has non-CNAME records', {
         code: 'NOT_FOUND', source: customDomain, allowed, cause: err
       })
@@ -102,7 +117,7 @@ const create = async ({ name, userId, customDomain }) => {
   logger.info(`generating ${siteId}`)
 
   if (customDomain) {
-    await this.verifyCustomDomain(siteId, customDomain, [
+    await this.verifyCustomDomain(customDomain, [
       getSiteDomain(siteId), process.env.DISTRIBUTION_DOMAIN
     ])
   }
@@ -179,7 +194,7 @@ const setCustomDomain = async (site, newCustomDomain) => {
       await cfront.deleteConfig([`config/${site.customDomain}`])
     } else {
       const { config } = await db.get('deployments', { siteId, deploymentId: site.currentDeploymentId })
-      await writeConfig(site, config)
+      await writeConfig({ ...site, customDomain: newCustomDomain }, config)
     }
   }
 

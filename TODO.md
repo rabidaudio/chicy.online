@@ -1,6 +1,6 @@
 # TODO
 
-- figure out why rewrites are broken again
+- fix undefined aws region bug when pushing to s3
 - refactor state machines to be a lot more explicit and well defined
   - rename site ready to unpublished
 - new features
@@ -21,3 +21,7 @@
 - frontend
 - Custom deployments
   - flag for controlling enabled auth providers
+
+- document verification of apex records
+  - alias record: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-cloudfront-distribution.html
+  - txt verification record: https://repost.aws/questions/QU6jYSBETpTF6sKyBZsK5L8A/cloudfront-saas-manager-broken-integration-with-zone-apex-dns-records-alias-records
