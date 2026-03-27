@@ -1,6 +1,6 @@
 {
   "name": "chicy.online",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Easy and cheap static site hosting on AWS",
   "keywords": [
     "static",
