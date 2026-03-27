@@ -22,7 +22,7 @@ async function init (argv) {
   const { siteId, deployKey } = await argv.api.createSite({ name })
 
   if (argv.generateConfig) {
-    const configPath = await saveCommonConfig()
+    const configPath = await saveCommonConfig({ siteId })
     if (configPath) {
       console.log(chalk.yellow('Created a config file at ') + chalk.dim(configPath) +
         chalk.yellow(' with some sensible defaults. Use this to configure the deployment settings of your site.'))
@@ -167,6 +167,7 @@ async function regenerateKey (argv) {
 }
 
 async function showDeployments (argv) {
+  logger.info(`Showing deployments for site ${argv.site}`)
   const deployments = await argv.api.getDeployments({ siteId: argv.site })
   if (deployments.length === 0) {
     console.warn(chalk.yellow('No deployments for site ') + chalk.dim(argv.site) + chalk.yellow('.'))

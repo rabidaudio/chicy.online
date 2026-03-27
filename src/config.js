@@ -22,7 +22,8 @@ const sanitizeStringArray = (name, value) => {
 
 const generateDefaultConfig = () => sanitize({})
 
-const generateCommonConfig = () => sanitize({
+const generateCommonConfig = (siteId) => sanitize({
+  siteId,
   headers: {},
   rewriteRules: [
     { match: '^$', replace: '/index.html', last: true },
@@ -34,7 +35,8 @@ const generateCommonConfig = () => sanitize({
 })
 
 const sanitize = (config) => {
-  let { exclude, retain, headers, rewriteRules } = config
+  let { siteId, exclude, retain, headers, rewriteRules } = config
+  siteId ||= null
   exclude ||= []
   retain ||= []
   exclude = sanitizeStringArray('exclude', exclude)
@@ -60,8 +62,8 @@ const sanitize = (config) => {
   })
 
   // TODO: verify rules won't crash by running a few samples through them
-
   return {
+    siteId,
     exclude,
     retain,
     headers,
@@ -87,12 +89,13 @@ const findConfig = async (confPath = null) => {
   return sanitize(conf)
 }
 
-const saveCommonConfig = async (dir = process.cwd()) => {
+const saveCommonConfig = async ({ siteId, dir }) => {
+  dir ||= process.cwd()
   const fullPath = path.join(dir, CONFIG_NAME)
   if (existsSync(fullPath)) {
     return null
   }
-  await fs.writeFile(fullPath, JSON.stringify(generateCommonConfig(), null, 2))
+  await fs.writeFile(fullPath, JSON.stringify(generateCommonConfig(siteId), null, 2))
   return path.relative(process.cwd(), fullPath)
 }
 

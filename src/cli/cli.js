@@ -241,6 +241,11 @@ module.exports = async function main (inArgv = process.argv) {
 }
 
 const requestSite = requestOption('site', async (argv) => {
+  // use value from config file
+  if (argv.config && argv.config.siteId) {
+    return argv.config.siteId
+  }
+
   if (isInteractive) {
     const sites = await argv.api.getSites()
 
