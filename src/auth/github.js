@@ -7,9 +7,7 @@ module.exports = class GithubAuthProvider {
     const url = new URL('https://github.com/login/oauth/authorize')
     url.searchParams.append('client_id', process.env.GITHUB_CLIENT_ID)
     url.searchParams.append('state', authReqId)
-    if (process.env.NODE_ENV !== 'prod') {
-      url.searchParams.append('redirect_uri', `${process.env.HOST}/oauth/github/callback`)
-    }
+    url.searchParams.append('redirect_uri', `${process.env.HOST}/oauth/github/callback`)
     return url.toString()
   }
 
