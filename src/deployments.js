@@ -192,14 +192,17 @@ const promote = async ({ promoteKey }) => {
     // run in parallel. We can be setting up cloudformation while we deal with the files
     await Promise.all([prepare(), Files.promote({ siteId, deploymentId })])
 
-    // ...but we can't invalidate until all the files have been loaded
-    if (hasDistro) {
-      await invalidate(site, deployment)
-    }
     deployment = await db.put('deployments', { ...deployment, state: 'deployed' })
 
     logger.info('updating site')
     site = await Sites.trackPromotionComplete(site, deployment)
+
+    // we can skip invalidation if we just made the distribution
+    if (hasDistro) {
+      await invalidate(site, deployment)
+    }
+
+    // STOPSHIP: remove old deployments
 
     return { site, deployment }
   } catch (err) {

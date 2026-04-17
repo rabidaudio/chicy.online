@@ -34,7 +34,8 @@ const parseDeploymentTarballPath = (path) => {
 }
 
 // where live site content is stored on S3
-const getSiteContentKey = (siteId) => `sites/${siteId}/content`
+const getAllSiteContentKey = (siteId) => `sites/${siteId}/content`
+const getSiteContentKey = (siteId, deploymentId) => `${getAllSiteContentKey(siteId)}/${deploymentId}`
 
 const getPromoteKey = (siteId) => `pending_promotions/${siteId}.promote`
 
@@ -58,7 +59,7 @@ const allFilesRelative = async (cwd, opts = {}) => {
 
 module.exports = {
   getSiteDeploymentsKey,
-  getSiteContentKey,
+  getAllSiteContentKey,
   getOrigin,
   getTarballKey,
   getDeploymentTarballPath,
@@ -141,7 +142,7 @@ module.exports = {
     logger.info(`checking out deployment ${deploymentId}`)
     await repo.checkout(deploymentId)
 
-    const siteContent = getSiteContentKey(siteId)
+    const siteContent = getSiteContentKey(siteId, deploymentId)
     logger.info(`deleting live site ${siteContent}`)
     await s3.deleteRecursive(siteContent)
 
@@ -159,6 +160,10 @@ module.exports = {
     logger.info('cleaning up')
     await repo.cleanup()
   }
+
+  // STOPSHIP: remove old deployments
+  // removeOldDeployment: ({ siteId, deploymentId })
+
 // TODO: squash deployments - reduce the number/size of old deployments
 }
 

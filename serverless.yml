@@ -388,6 +388,12 @@ resources:
                     Comment: "Site ID"
                     DefaultValue: "root"
                     Required: false
+              - Name: currentDeploymentId
+                Definition:
+                  StringSchema:
+                    Comment: "Deployment ID"
+                    DefaultValue: "none"
+                    Required: false
           Origins:
             - DomainName:
                 Fn::GetAtt: [AppBucket, RegionalDomainName]
@@ -397,7 +403,7 @@ resources:
                 Ref: OAC
               S3OriginConfig:
                 OriginAccessIdentity: ""
-              OriginPath: '/sites/{{siteId}}/content'
+              OriginPath: '/sites/{{siteId}}/content/{{currentDeploymentId}}'
           ViewerCertificate:
             AcmCertificateArn:
               Ref: SiteCertificate

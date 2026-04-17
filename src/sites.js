@@ -245,14 +245,15 @@ const attachDomain = async (site) => {
   return response('attached')
 }
 
-const prepareDistribution = async (site) => {
+const prepareDistribution = async (site, deployment) => {
   if (site.tenantId) return site
 
   // create the distribution
   logger.info('creating distro tenant')
   const { siteId, customDomain, domainAttached } = site
   const baseDomain = getSiteDomain(siteId)
-  const { tenant, etag } = await cfront.createTenant({ siteId, customDomain, baseDomain })
+  const currentDeploymentId = deployment.deploymentId
+  const { tenant, etag } = await cfront.createTenant({ siteId, customDomain, baseDomain, currentDeploymentId })
   logger.verbose('tenant distro created', tenant)
   site = await db.put('sites', { ...site, tenantId: tenant.Id, etag })
 
@@ -284,9 +285,15 @@ const trackPromotionInProgress = async (site) => {
 const trackPromotionComplete = async (site, deployment) => {
   await writeConfig(site, deployment.config)
 
+  const { siteId, tenantId, etag } = site
+  const currentDeploymentId = deployment.deploymentId
+  logger.info(`updating currentDeploymentId for site ${siteId} to ${currentDeploymentId}`)
+  const res = await cfront.updateCurrentDeploymentId({ siteId, tenantId, etag, currentDeploymentId })
+
   return await db.put('sites', {
     ...site,
-    currentDeploymentId: deployment.deploymentId,
+    currentDeploymentId,
+    etag: res.etag,
     deployedAt: new Date().toISOString(),
     state: 'deployed'
   })
@@ -326,7 +333,7 @@ const deleteSite = async (siteId) => {
   logger.info(`[${siteId}] deleted subdomain route`)
 
   // delete data from S3
-  await s3.deleteRecursive(git.getSiteContentKey(siteId))
+  await s3.deleteRecursive(git.getAllSiteContentKey(siteId))
   logger.info(`[${siteId}] deleted site content`)
   await s3.deleteRecursive(git.getSiteDeploymentsKey(siteId))
   logger.info(`[${siteId}] deleted deployment data`)

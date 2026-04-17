@@ -41,7 +41,7 @@ const domainParams = ({ baseDomain, customDomain }) => {
   return params
 }
 
-const createTenant = async ({ siteId, baseDomain, customDomain }) => {
+const createTenant = async ({ siteId, currentDeploymentId, baseDomain, customDomain }) => {
   const params = {
     ...domainParams({ baseDomain, customDomain }),
     Enabled: true,
@@ -53,7 +53,8 @@ const createTenant = async ({ siteId, baseDomain, customDomain }) => {
       { Name: 'stage', Value: process.env.NODE_ENV }
     ],
     Parameters: [
-      { Name: 'siteId', Value: siteId }
+      { Name: 'siteId', Value: siteId },
+      { Name: 'currentDeploymentId', Value: currentDeploymentId }
     ]
   }
   logger.http(`cloudfront: create tenant ${siteId}`, params)
@@ -96,6 +97,22 @@ const removeCustomDomain = async ({ tenantId, etag, baseDomain }) => {
       Id: tenantId,
       IfMatch: etag,
       Customizations: {} // removes the certificate
+    }
+    logger.http(`cloudfront: update tenant ${tenantId}`, params)
+    const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand(params))
+    return { tenant: DistributionTenant, etag: ETag }
+  })
+}
+
+const updateCurrentDeploymentId = async ({ tenantId, etag, siteId, currentDeploymentId }) => {
+  return withProperETag({ tenantId, etag }, async (etag) => {
+    const params = {
+      Id: tenantId,
+      IfMatch: etag,
+      Parameters: [
+        { Name: 'siteId', Value: siteId },
+        { Name: 'currentDeploymentId', Value: currentDeploymentId }
+      ]
     }
     logger.http(`cloudfront: update tenant ${tenantId}`, params)
     const { DistributionTenant, ETag } = await cfClient.send(new UpdateDistributionTenantCommand(params))
@@ -233,6 +250,7 @@ module.exports = {
   getTenant,
   setCustomDomain,
   removeCustomDomain,
+  updateCurrentDeploymentId,
   findCloudfrontCertificateMatching,
   attachCertificate,
   disableTenant,
