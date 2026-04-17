@@ -181,6 +181,8 @@ const promote = async ({ promoteKey }) => {
     logger.warn(`Unknown deployment: ${siteId}/${deploymentId}`)
     return
   }
+
+  const previousDeploymentId = site.currentDeploymentId
   const hasDistro = site.tenantId
 
   try {
@@ -202,7 +204,9 @@ const promote = async ({ promoteKey }) => {
       await invalidate(site, deployment)
     }
 
-    // STOPSHIP: remove old deployments
+    if (previousDeploymentId) {
+      await Files.removeOldDeployment({ siteId, previousDeploymentId })
+    }
 
     return { site, deployment }
   } catch (err) {

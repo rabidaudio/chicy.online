@@ -143,8 +143,6 @@ module.exports = {
     await repo.checkout(deploymentId)
 
     const siteContent = getSiteContentKey(siteId, deploymentId)
-    logger.info(`deleting live site ${siteContent}`)
-    await s3.deleteRecursive(siteContent)
 
     logger.info('copying files')
     const files = await allFilesRelative(repo.cwd, { exclude: ['.git/**'] })
@@ -159,10 +157,13 @@ module.exports = {
 
     logger.info('cleaning up')
     await repo.cleanup()
-  }
+  },
 
-  // STOPSHIP: remove old deployments
-  // removeOldDeployment: ({ siteId, deploymentId })
+  removeOldDeployment: async ({ siteId, previousDeploymentId }) => {
+    const siteContent = getSiteContentKey(siteId, previousDeploymentId)
+    logger.info(`deleting non-live site ${siteContent}`)
+    await s3.deleteRecursive(siteContent)
+  }
 
 // TODO: squash deployments - reduce the number/size of old deployments
 }
