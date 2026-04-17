@@ -323,6 +323,7 @@ const authenticateUser = async (argv, next) => {
       return await next()
     } else {
       await db.update((data) => { data.userToken = null }) // clear token
+      return await authenticateUser(argv, next)
     }
   }
 

@@ -50,9 +50,16 @@ class Api {
   }
 
   async status () {
-    const { data, res } = await this.fetch('/')
-    const isLoggedIn = !!(data.userId || data.deployKeySiteId)
-    return { isLoggedIn, data, res }
+    try {
+      const { data, res } = await this.fetch('/')
+      const isLoggedIn = !!(data.userId || data.deployKeySiteId)
+      return { isLoggedIn, data, res }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        return { isLoggedIn: false }
+      }
+      throw err
+    }
   }
 
   async signup ({ provider } = {}) {

@@ -25,3 +25,5 @@
 - document verification of apex records
   - alias record: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-cloudfront-distribution.html
   - txt verification record: https://repost.aws/questions/QU6jYSBETpTF6sKyBZsK5L8A/cloudfront-saas-manager-broken-integration-with-zone-apex-dns-records-alias-records
+  - verify apex records: txt record
+
