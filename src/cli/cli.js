@@ -2,6 +2,7 @@ const yargs = require('yargs')
 const { hideBin } = require('yargs/helpers')
 const prompts = require('@inquirer/prompts')
 const chalk = require('chalk')
+const ora = require('ora').default
 
 const logManger = require('../logger')
 const logger = logManger.getLogger()
@@ -241,6 +242,8 @@ module.exports = async function main (inArgv = process.argv) {
       }
       argv.config = loadedConfig || Config.generateDefaultConfig()
       logger.verbose(`using config from ${configPath || 'default location'}`, argv.config)
+
+      argv.spinner = ora({ discardStdin: false })
     })
 
   cli.wrap(Math.min(cli.terminalWidth(), 120))

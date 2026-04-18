@@ -4,7 +4,6 @@ const path = require('node:path')
 const chalk = require('chalk')
 const prettyBytes = require('pretty-bytes').default
 const prompts = require('@inquirer/prompts')
-const ora = require('ora').default
 
 const logger = require('../logger').getLogger()
 
@@ -103,7 +102,6 @@ async function configure (argv) {
     console.warn(chalk.yellow('Nothing changed.'))
   } else if (site.domainState === 'pending_set') {
     if (isInteractive) {
-      argv.spinner ||= ora()
       argv.spinner.text = 'Waiting for certificate validation...'
       argv.spinner.start()
     }
@@ -197,7 +195,6 @@ async function showDeployments (argv) {
 async function deploy (argv) {
   const { message, exclude, dryRun, config } = argv
   if (isInteractive) console.log(chalk.blue('Deploying to site ') + chalk.bold(argv.site) + chalk.blue(' ...'))
-  argv.spinner ||= ora()
 
   const allExcludes = [...exclude, ...(config.exclude)]
   if (dryRun) {
@@ -245,7 +242,6 @@ async function deploy (argv) {
 }
 
 async function promote (argv) {
-  argv.spinner ||= ora()
   if (isInteractive) {
     console.log(chalk.blue('Promoting deployment ') + chalk.bold(argv.deployment) + chalk.blue(' ...'))
   }
