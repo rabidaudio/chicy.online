@@ -1,10 +1,12 @@
 const yargs = require('yargs')
 const { hideBin } = require('yargs/helpers')
+const chalk = require('chalk')
 const prompts = require('@inquirer/prompts')
 
 const s3 = require('../s3')
 const db = require('../db')
 const Sites = require('../sites')
+const Migrations = require('./migrations')
 
 const logger = require('../logger').configure({ level: 'verbose' }).getLogger()
 
@@ -36,7 +38,7 @@ module.exports = async function main () {
         describe: 'list for a specific user',
         default: null
       }), async (argv) => {
-      // TODO: pagniate
+      // TODO: paginate
       let sites
       if (argv.user) {
         sites = await db.query('sites', { userId: argv.user }, { idx: 'idxUserId', asc: false, limit: 100 })
@@ -62,6 +64,71 @@ module.exports = async function main () {
       }))
       for (const site of sanitized) {
         console.log(site)
+      }
+    })
+    .command({
+      command: 'migrate',
+      description: 'Manage migrating data for new deployments',
+      builder: (yargs) => {
+        return yargs.command({
+          command: 'new [message]',
+          description: 'Create a new migration',
+          builder: y => y.positional('message', {
+            describe: 'A short description of the task'
+          }),
+          handler: async (argv) => {
+            if (!argv.message) {
+              argv.message = await prompts.input({ message: 'Enter a description for the migration:', required: true })
+            }
+            const { path } = await Migrations.create(argv.message)
+            console.log(`Migration created: ${path}`)
+          }
+        }).command({
+          command: 'ls',
+          description: 'List all migrations and their states',
+          handler: async (argv) => {
+            const state = await Migrations.getMigrationState()
+            state.reverse()
+            if (state.length === 0) {
+              console.warn(chalk.yellow('No migrations created yet.'))
+            }
+            for (const { migrationId, timestamp, message, run } of state) {
+              console.log((run ? chalk.green('✓') : chalk.red('𐄂')) + ` ${message} (${timestamp.fromNow()}) [${migrationId}]`)
+            }
+          }
+        }).command({
+          command: 'all',
+          description: 'Run all pending migrations',
+          handler: async (argv) => {
+            const run = await Migrations.runAll()
+            if (run.length === 0) {
+              console.log(chalk.yellow('Up-to-date, no pending migrations.'))
+            } else {
+              console.log(chalk.green(`${run.length} migrations completed.`))
+            }
+          }
+        }).command({
+          command: 'up',
+          description: 'Run the next pending migration',
+          handler: async (argv) => {
+            await Migrations.up()
+            console.log('Migration complete.')
+          }
+        }).command({
+          command: 'down',
+          description: 'Rollback the most recent migration',
+          handler: async (argv) => {
+            await Migrations.down()
+            console.log('Rollback complete.')
+          }
+        }).command({
+          command: 'initenv',
+          description: 'Mark all migrations as run (for new environments)',
+          handler: async (argv) => {
+            await Migrations.initNewEnvironment()
+            console.log('Migrations initialized.')
+          }
+        })
       }
     })
     .command('wipe', 'Wipe all users and sites', y => y, async (argv) => {
