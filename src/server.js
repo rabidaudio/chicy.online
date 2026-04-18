@@ -118,6 +118,8 @@ router.get('/', async (ctx) => {
   if (process.env.NODE_ENV === 'dev') {
     data.distroId = process.env.DISTRIBUTION_ID
     data.connectionGroupId = process.env.CONNECTION_GROUP_ID
+    data.putRoleArn = process.env.S3_PUT_ROLE_ARN
+    data.kvStoreArn = process.env.KV_STORE_ARN
   }
   if (ctx.user) data.userId = ctx.user.userId
   if (ctx.site) data.deployKeySiteId = ctx.site.siteId
